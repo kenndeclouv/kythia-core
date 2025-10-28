@@ -1,30 +1,32 @@
 /**
- * 🚀 Caching Layer for Sequelize Models (Hybrid Redis + In-Memory Fallback Edition, Sniper Mode)
+ * 🚀 Caching Layer for Sequelize Models (Hybrid Redis + In-Memory Fallback Edition, Sniper Mode, Shard-aware)
  *
  * @file src/database/KythiaModel.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.1-beta
+ * @version 0.9.2-beta
  *
  * @description
- * The ultimate, high-availability caching layer. It prioritizes a central Redis cache for speed and
- * scalability. If Redis becomes unavailable, it seamlessly falls back to a per-process, in-memory
- * Map cache. This ensures the application remains fast and responsive even during cache server outages.
+ * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
+ * fallback to in-memory cache is DISABLED (dangerous with sharding). If sharding, then Redis is REQUIRED,
+ * and if Redis goes down, instant queries go directly to db.
+ * For shard: false/undefined, original hybrid fallback applies.
  *
- * ✨ Core Features (Hybrid Upgrade + Sniper Tagging):
- * -  Automatic Fallback: Switches from Redis to in-memory Map cache when Redis fails.
- * -  Zero Downtime Caching: The application always has a caching layer available.
- * -  Intelligent Routing: Core methods now act as routers, delegating to the active cache engine.
- * -  Consistent API: No changes needed in any other part of the application.
- * -  Tag-aware Sniper Invalidation for maximum precision on cache busting.
- * -  Smart: On Redis disconnect, will auto-reconnect attempts after several (configurable) minutes
+ * ✨ Core Features:
+ * -  Shard Mode: If using Redis sharding, disables Map fallback for strict consistency.
+ * -  Hybrid Fallback: For non-shard setups, automatic fallback is preserved.
+ * -  Fast, consistent, safe cache busting.
  */
 
 const jsonStringify = require('json-stable-stringify');
 const { Model } = require('sequelize');
+const { LRUCache } = require('lru-cache');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
+
+const REDIS_ERROR_TOLERANCE_COUNT = 3;
+const REDIS_ERROR_TOLERANCE_INTERVAL_MS = 10 * 1000;
 
 function safeStringify(obj, logger) {
     try {
@@ -52,7 +54,7 @@ class KythiaModel extends Model {
     static config = {};
     static CACHE_VERSION = '1.0.0';
 
-    static localCache = new Map();
+    static localCache = new LRUCache({ max: 1000 });
     static localNegativeCache = new Set();
     static MAX_LOCAL_CACHE_SIZE = 1000;
     static DEFAULT_TTL = 60 * 60 * 1000;
@@ -64,13 +66,9 @@ class KythiaModel extends Model {
     static pendingQueries = new Map();
     static cacheStats = { redisHits: 0, mapHits: 0, misses: 0, sets: 0, clears: 0, errors: 0 };
 
-    static localCache = new Map();
-    static localNegativeCache = new Set();
-    static MAX_LOCAL_CACHE_SIZE = 1000;
+    static redisErrorTimestamps = [];
 
-    static pendingQueries = new Map();
-    static cacheStats = { redisHits: 0, mapHits: 0, misses: 0, sets: 0, clears: 0, errors: 0 };
-    static DEFAULT_TTL = 60 * 60 * 1000;
+    static isShardMode = false; // when true, local fallback is disabled
 
     /**
      * 💉 Injects core dependencies into the KythiaModel class.
@@ -90,14 +88,68 @@ class KythiaModel extends Model {
         this.config = config;
         this.CACHE_VERSION = config.db?.redisCacheVersion || '1.0.0';
 
+        // Check for sharding
+        this.isShardMode = !!config?.db?.redis?.shard || false;
+
+        if (this.isShardMode) {
+            this.logger.info('🟣 [REDIS][SHARD] Detected redis sharding mode (shard: true). Local fallback cache DISABLED!');
+        }
+
         if (redis) {
             this.redis = redis;
             this.isRedisConnected = redis.status === 'ready';
         } else if (redisOptions) {
             this.initializeRedis(redisOptions);
         } else {
-            this.logger.warn('🟠 [REDIS] No Redis client or options provided. Operating in In-Memory Cache mode only.');
-            this.isRedisConnected = false;
+            if (this.isShardMode) {
+                this.logger.error('❌ [REDIS][SHARD] No Redis client/options, but shard:true. Application will work WITHOUT caching!');
+                this.isRedisConnected = false;
+            } else {
+                this.logger.warn('🟠 [REDIS] No Redis client or options provided. Operating in In-Memory Cache mode only.');
+                this.isRedisConnected = false;
+            }
+        }
+    }
+
+    /**
+     * Helper: Track redis error timestamp, and check if error count in interval exceeds tolerance.
+     * Jika error yang terjadi >= REDIS_ERROR_TOLERANCE_COUNT dalam  REDIS_ERROR_TOLERANCE_INTERVAL_MS,
+     * barulah fallback ke In-Memory (isRedisConnected = false) -- KECUALI jika shard: true.
+     */
+    static _trackRedisError(err) {
+        const now = Date.now();
+
+        this.redisErrorTimestamps = (this.redisErrorTimestamps || []).filter((ts) => now - ts < REDIS_ERROR_TOLERANCE_INTERVAL_MS);
+        this.redisErrorTimestamps.push(now);
+
+        if (this.redisErrorTimestamps.length >= REDIS_ERROR_TOLERANCE_COUNT) {
+            if (this.isRedisConnected) {
+                // In shard mode, fallback is not allowed!
+                if (this.isShardMode) {
+                    this.logger.error(
+                        `❌ [REDIS][SHARD] ${this.redisErrorTimestamps.length} consecutive errors in ${
+                            REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
+                        }s. SHARD MODE: Disabling cache (NO fallback), all queries go to DB. (Last error: ${err?.message})`
+                    );
+                    this.isRedisConnected = false;
+                    // Do not schedule reconnect if redis is not supposed to fallback. Reconnect logic is fine.
+                    this._scheduleReconnect();
+                } else {
+                    this.logger.error(
+                        `❌ [REDIS] ${this.redisErrorTimestamps.length} consecutive errors in ${
+                            REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
+                        }s. Fallback to In-Memory Cache! (Last error: ${err?.message})`
+                    );
+                    this.isRedisConnected = false;
+                    this._scheduleReconnect();
+                }
+            }
+
+            this.redisErrorTimestamps = [];
+        } else {
+            this.logger.warn(
+                `🟠 [REDIS] Error #${this.redisErrorTimestamps.length}/${REDIS_ERROR_TOLERANCE_COUNT} tolerated. (${err?.message})`
+            );
         }
     }
 
@@ -112,15 +164,29 @@ class KythiaModel extends Model {
         const Redis = require('ioredis');
         this.lastRedisOpts = redisOptions;
 
+        // Check sharding now if not set yet (for runtime .initializeRedis case)
+        if (redisOptions && typeof redisOptions === 'object' && redisOptions.shard) {
+            this.isShardMode = true;
+        }
+
         if (!redisOptions || (typeof redisOptions === 'string' && redisOptions.trim() === '')) {
-            this.logger.warn('🟠 [REDIS] No Redis URL provided. Operating in In-Memory Cache mode only.');
-            this.isRedisConnected = false;
+            if (this.isShardMode) {
+                this.logger.error('❌ [REDIS][SHARD] No Redis URL/options provided but shard:true. Will run without caching!');
+                this.isRedisConnected = false;
+            } else {
+                this.logger.warn('🟠 [REDIS] No Redis URL provided. Operating in In-Memory Cache mode only.');
+                this.isRedisConnected = false;
+            }
             return null;
         }
 
         const retryStrategy = (times) => {
             if (times > 5) {
-                this.logger.error(`❌ [REDIS] Could not connect after ${times - 1} retries. Falling back to In-Memory Cache.`);
+                if (this.isShardMode) {
+                    this.logger.error(`❌ [REDIS][SHARD] Could not connect after ${times - 1} retries. Disabling cache (no fallback)!`);
+                } else {
+                    this.logger.error(`❌ [REDIS] Could not connect after ${times - 1} retries. Falling back to In-Memory Cache.`);
+                }
                 return null;
             }
             const delay = Math.min(times * 500, 2000);
@@ -139,7 +205,11 @@ class KythiaModel extends Model {
         );
 
         this.redis.connect().catch((err) => {
-            this.logger.error('❌ [REDIS] Initial connection failed:', err.message);
+            if (this.isShardMode) {
+                this.logger.error('❌ [REDIS][SHARD] Initial connection failed: ' + err.message);
+            } else {
+                this.logger.error('❌ [REDIS] Initial connection failed:', err.message);
+            }
         });
 
         this._setupRedisEventHandlers();
@@ -157,6 +227,8 @@ class KythiaModel extends Model {
             }
             this.isRedisConnected = true;
 
+            this.redisErrorTimestamps = [];
+
             if (this.reconnectTimeout) {
                 clearTimeout(this.reconnectTimeout);
                 this.reconnectTimeout = null;
@@ -165,13 +237,21 @@ class KythiaModel extends Model {
 
         this.redis.on('error', (err) => {
             if (err && (err.code === 'ECONNREFUSED' || err.message)) {
-                this.logger.warn(`🟠 [REDIS] Error: ${err.message}`);
+                if (this.isShardMode) {
+                    this.logger.warn(`🟠 [REDIS][SHARD] Error: ${err.message}`);
+                } else {
+                    this.logger.warn(`🟠 [REDIS] Error: ${err.message}`);
+                }
             }
         });
 
         this.redis.on('close', () => {
             if (this.isRedisConnected) {
-                this.logger.error('❌ [REDIS] Connection closed. Falling back to In-Memory Cache mode.');
+                if (this.isShardMode) {
+                    this.logger.error('❌ [REDIS][SHARD] Connection closed. Cache DISABLED (no fallback).');
+                } else {
+                    this.logger.error('❌ [REDIS] Connection closed. Falling back to In-Memory Cache mode.');
+                }
             }
             this.isRedisConnected = false;
             this._scheduleReconnect();
@@ -189,7 +269,11 @@ class KythiaModel extends Model {
         if (sinceLast < RECONNECT_DELAY_MINUTES * 60 * 1000) return;
 
         this.lastAutoReconnectTs = Date.now();
-        this.logger.warn(`🟢 [REDIS] Attempting auto-reconnect after ${RECONNECT_DELAY_MINUTES}min downtime...`);
+        if (this.isShardMode) {
+            this.logger.warn(`[REDIS][SHARD] Attempting auto-reconnect after ${RECONNECT_DELAY_MINUTES}min downtime...`);
+        } else {
+            this.logger.warn(`🟢 [REDIS] Attempting auto-reconnect after ${RECONNECT_DELAY_MINUTES}min downtime...`);
+        }
 
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
@@ -231,9 +315,8 @@ class KythiaModel extends Model {
     }
 
     /**
-     * 📥 [HYBRID ROUTER] Sets a value in the currently active cache engine (Redis or Map).
-     * This method acts as a router, delegating the operation to the appropriate
-     * private implementation based on the Redis connection status.
+     * 📥 [HYBRID/SHARD ROUTER] Sets a value in the currently active cache engine.
+     * In shard mode, if Redis down, nothing is cached.
      * @param {string|Object} cacheKeyOrQuery - The key or query object to store the data under.
      * @param {*} data - The data to cache. Use `null` for negative caching.
      * @param {number} [ttl=this.DEFAULT_TTL] - The time-to-live for the entry in milliseconds.
@@ -245,14 +328,15 @@ class KythiaModel extends Model {
 
         if (this.isRedisConnected) {
             await this._redisSetCacheEntry(cacheKey, data, finalTtl, tags);
-        } else {
+        } else if (!this.isShardMode) {
+            // NON-shard only
             this._mapSetCacheEntry(cacheKey, data, finalTtl);
-        }
+        } // else: shard mode, Redis is down, DO NOT cache
     }
 
     /**
-     * 📤 [HYBRID ROUTER] Retrieves a value from the currently active cache engine.
-     * Delegates the read operation to either the Redis or the in-memory Map cache.
+     * 📤 [HYBRID/SHARD ROUTER] Retrieves a value from the currently active cache engine.
+     * If in shard mode and Redis is down, always miss (direct to DB).
      * @param {string|Object} cacheKeyOrQuery - The key or query object of the item to retrieve.
      * @returns {Promise<{hit: boolean, data: *|undefined}>} An object indicating if the cache was hit and the retrieved data.
      */
@@ -260,34 +344,30 @@ class KythiaModel extends Model {
         const cacheKey = typeof cacheKeyOrQuery === 'string' ? cacheKeyOrQuery : this.getCacheKey(cacheKeyOrQuery);
         if (this.isRedisConnected) {
             return this._redisGetCachedEntry(cacheKey, includeOptions);
-        } else {
+        } else if (!this.isShardMode) {
+            // fallback only if not sharding
             return this._mapGetCachedEntry(cacheKey, includeOptions);
         }
+        // SHARD MODE: no local fallback
+        return { hit: false, data: undefined };
     }
 
     /**
-     * 🗑️ [HYBRID ROUTER] Deletes an entry from the currently active cache engine.
-     * Delegates the delete operation to the appropriate cache implementation.
+     * 🗑️ [HYBRID/SHARD ROUTER] Deletes an entry from the currently active cache engine.
+     * In shard mode, if Redis down, delete does nothing (cache already dead).
      * @param {string|Object} keys - The query identifier used to generate the key to delete.
      */
     static async clearCache(keys) {
         const cacheKey = typeof keys === 'string' ? keys : this.getCacheKey(keys);
         if (this.isRedisConnected) {
             await this._redisClearCache(cacheKey);
-        } else {
+        } else if (!this.isShardMode) {
             this._mapClearCache(cacheKey);
         }
     }
 
     /**
      * 🔴 (Private) Sets a cache entry specifically in Redis, supporting tags for sniper invalidation.
-     * Serializes the data to JSON and handles negative caching with a placeholder.
-     * Uses Redis multi (transactional) to add tag sets.
-     * @param {string} cacheKey - The Redis key.
-     * @param {*} data - The data to cache.
-     * @param {number} ttl - The TTL in milliseconds.
-     * @param {string[]} tags - Tags to associate this entry with.
-     * @private
      */
     static async _redisSetCacheEntry(cacheKey, data, ttl, tags = []) {
         try {
@@ -308,19 +388,12 @@ class KythiaModel extends Model {
             await multi.exec();
             this.cacheStats.sets++;
         } catch (err) {
-            this.logger.error(`❌ [REDIS SET] Failed for key ${cacheKey}. Falling back. Error:`, err.message);
-            this.isRedisConnected = false;
-            this._scheduleReconnect();
+            this._trackRedisError(err);
         }
     }
 
     /**
      * 🔴 (Private) Retrieves and deserializes an entry specifically from Redis.
-     * It handles negative caching placeholders and rebuilds Sequelize instances from raw JSON data.
-     * If the operation fails, it flags the Redis connection as down and returns a cache miss.
-     * @param {string} cacheKey - The Redis key.
-     * @returns {Promise<{hit: boolean, data: *|undefined}>} The cache result.
-     * @private
      */
     static async _redisGetCachedEntry(cacheKey, includeOptions) {
         try {
@@ -352,32 +425,25 @@ class KythiaModel extends Model {
                 return { hit: true, data: instance };
             }
         } catch (err) {
-            this.logger.error(`❌ [REDIS SET] Failed for key ${cacheKey}. Falling back. Error:`, err.message);
-            this.isRedisConnected = false;
-            this._scheduleReconnect();
+            this._trackRedisError(err);
+            return { hit: false, data: undefined };
         }
     }
 
     /**
      * 🔴 (Private) Deletes an entry specifically from Redis.
-     * If the operation fails, it flags the Redis connection as down.
-     * @param {string} cacheKey - The canonical cache key to delete.
-     * @private
      */
     static async _redisClearCache(cacheKey) {
         try {
             await this.redis.del(cacheKey);
             this.cacheStats.clears++;
         } catch (err) {
-            this.logger.error(`❌ [REDIS SET] Failed for key ${cacheKey}. Falling back. Error:`, err.message);
-            this.isRedisConnected = false;
-            this._scheduleReconnect();
+            this._trackRedisError(err);
         }
     }
 
     /**
      * 🎯 [SNIPER] Invalidates cache entries by tags in Redis.
-     * @param {string[]} tags - An array of tags to invalidate.
      */
     static async invalidateByTags(tags) {
         if (!this.isRedisConnected || !Array.isArray(tags) || tags.length === 0) return;
@@ -393,26 +459,16 @@ class KythiaModel extends Model {
                 await this.redis.del(tags);
             }
         } catch (err) {
-            this.logger.error(`❌ [REDIS SET] Failed for key ${cacheKey}. Falling back. Error:`, err.message);
-            this.isRedisConnected = false;
-            this._scheduleReconnect();
+            this._trackRedisError(err);
         }
     }
 
     /**
      * 🗺️ (Private) Sets a cache entry specifically in the in-memory Map.
-     * It clones the data to prevent mutation issues and handles negative caching.
-     * Also manages a simple FIFO-like eviction policy if the cache size limit is reached.
-     * @param {string} cacheKey - The Map key.
-     * @param {*} data - The data to cache.
-     * @param {number} ttl - The TTL in milliseconds.
-     * @private
+     * DISABLED in shard mode.
      */
     static _mapSetCacheEntry(cacheKey, data, ttl) {
-        if (this.localCache.size >= this.MAX_LOCAL_CACHE_SIZE) {
-            const firstKey = this.localCache.keys().next().value;
-            this.localCache.delete(firstKey);
-        }
+        if (this.isShardMode) return;
 
         if (data === null) {
             this.localNegativeCache.add(cacheKey);
@@ -435,13 +491,11 @@ class KythiaModel extends Model {
 
     /**
      * 🗺️ (Private) Retrieves an entry specifically from the in-memory Map.
-     * It checks for expired entries, handles negative caching, and rebuilds fresh
-     * Sequelize instances from the stored plain objects to ensure data integrity.
-     * @param {string} cacheKey - The Map key.
-     * @returns {{hit: boolean, data: *|undefined}} The cache result.
-     * @private
+     * DISABLED in shard mode.
      */
     static _mapGetCachedEntry(cacheKey, includeOptions) {
+        if (this.isShardMode) return { hit: false, data: undefined }; // DISABLED in shard mode
+
         if (this.localNegativeCache.has(cacheKey)) {
             this.cacheStats.mapHits++;
             return { hit: true, data: null };
@@ -487,10 +541,10 @@ class KythiaModel extends Model {
 
     /**
      * 🗺️ (Private) Deletes an entry specifically from the in-memory Map.
-     * @param {string} cacheKey - The canonical cache key to delete.
-     * @private
+     * DISABLED in shard mode.
      */
     static _mapClearCache(cacheKey) {
+        if (this.isShardMode) return; // DISABLED in shard mode
         this.localCache.delete(cacheKey);
         this.localNegativeCache.delete(cacheKey);
         this.cacheStats.clears++;
@@ -499,9 +553,10 @@ class KythiaModel extends Model {
     /**
      * 🗺️ (Private) Clears all in-memory cache entries for this model.
      * Used as a fallback when Redis is disconnected.
-     * @private
+     * DISABLED in shard mode.
      */
     static _mapClearAllModelCache() {
+        if (this.isShardMode) return; // DISABLED in shard mode
         const prefix = `${this.CACHE_VERSION}:${this.name}:`;
         let cleared = 0;
 
@@ -526,9 +581,6 @@ class KythiaModel extends Model {
     /**
      * 🔄 (Internal) Standardizes various query object formats into a consistent Sequelize options object.
      * This helper ensures that `getCache({ id: 1 })` and `getCache({ where: { id: 1 } })` are treated identically.
-     * @param {Object} options - The user-provided query options.
-     * @returns {Object} A standardized options object with a `where` property.
-     * @private
      */
     static _normalizeFindOptions(options) {
         if (!options || typeof options !== 'object' || Object.keys(options).length === 0) return { where: {} };
@@ -555,9 +607,7 @@ class KythiaModel extends Model {
 
     /**
      * 📦 fetches a single record from the cache, falling back to the database on a miss.
-     * This is the primary method for retrieving individual model instances. It's fully hybrid-aware.
-     * @param {Object} keys - A Sequelize `where` clause or a query options object.
-     * @returns {Promise<Model|null>} A single model instance or null if not found.
+     * In SHARD mode/fallback, cache miss triggers instant DB query, no in-memory caching.
      */
     static async getCache(keys, options = {}) {
         if (options.noCache) {
@@ -589,12 +639,15 @@ class KythiaModel extends Model {
 
         const queryPromise = this.findOne(normalizedOptions)
             .then((record) => {
-                const tags = [`${this.name}`];
-                if (record) {
-                    const pk = this.primaryKeyAttribute;
-                    tags.push(`${this.name}:${pk}:${record[pk]}`);
+                // Only cache if allowed (no cache in shard/failover unless redis is up)
+                if (this.isRedisConnected || !this.isShardMode) {
+                    const tags = [`${this.name}`];
+                    if (record) {
+                        const pk = this.primaryKeyAttribute;
+                        tags.push(`${this.name}:${pk}:${record[pk]}`);
+                    }
+                    this.setCacheEntry(cacheKey, record, undefined, tags);
                 }
-                this.setCacheEntry(cacheKey, record, undefined, tags);
                 return record;
             })
             .finally(() => {
@@ -607,9 +660,6 @@ class KythiaModel extends Model {
 
     /**
      * 📦 Fetches an array of records from the cache, falling back to the database.
-     * Ideal for caching lists of results from `findAll` queries. Fully hybrid-aware.
-     * @param {Object} [options={}] - A Sequelize `findAll` options object (containing `where`, `order`, etc.).
-     * @returns {Promise<Model[]>} An array of model instances.
      */
     static async getAllCache(options = {}) {
         const { cacheTags, noCache, ...queryOptions } = options || {};
@@ -633,13 +683,15 @@ class KythiaModel extends Model {
 
         const queryPromise = this.findAll(normalizedOptions)
             .then((records) => {
-                const tags = [`${this.name}`];
+                // Only cache if allowed
+                if (this.isRedisConnected || !this.isShardMode) {
+                    const tags = [`${this.name}`];
 
-                if (Array.isArray(cacheTags)) {
-                    tags.push(...cacheTags);
+                    if (Array.isArray(cacheTags)) {
+                        tags.push(...cacheTags);
+                    }
+                    this.setCacheEntry(cacheKey, records, undefined, tags);
                 }
-                this.setCacheEntry(cacheKey, records, undefined, tags);
-
                 return records;
             })
             .finally(() => {
@@ -652,10 +704,6 @@ class KythiaModel extends Model {
 
     /**
      * 📦 Attempts to find a record based on `options.where`. If found, it returns the cached or DB record.
-     * If not found, it creates a new record using `options.defaults`. The operation is cache-aware.
-     * This method also includes in-memory locking to prevent race conditions.
-     * @param {Object} options - A Sequelize `findOrCreate` options object.
-     * @returns {Promise<[Model, boolean]>} An array containing the instance and a boolean indicating if it was created.
      */
     static async findOrCreateWithCache(options) {
         if (!options || !options.where) {
@@ -675,12 +723,15 @@ class KythiaModel extends Model {
         }
         const findOrCreatePromise = this.findOrCreate(findOrCreateOptions)
             .then(([instance, created]) => {
-                const tags = [`${this.name}`];
-                if (instance) {
-                    const pk = this.primaryKeyAttribute;
-                    tags.push(`${this.name}:${pk}:${instance[pk]}`);
+                // Only cache if allowed
+                if (this.isRedisConnected || !this.isShardMode) {
+                    const tags = [`${this.name}`];
+                    if (instance) {
+                        const pk = this.primaryKeyAttribute;
+                        tags.push(`${this.name}:${pk}:${instance[pk]}`);
+                    }
+                    this.setCacheEntry(cacheKey, instance, undefined, tags);
                 }
-                this.setCacheEntry(cacheKey, instance, undefined, tags);
                 return [instance, created];
             })
             .finally(() => {
@@ -693,9 +744,6 @@ class KythiaModel extends Model {
 
     /**
      * 📦 Fetches the count of records matching the query from the cache, falling back to the database.
-     * @param {Object} [options={}] - A Sequelize `count` options object.
-     * @param {number} [ttl] - A specific TTL for this count operation.
-     * @returns {Promise<number>} The total number of matching records.
      */
     static async countWithCache(options = {}, ttl = 5 * 60 * 1000) {
         const { cacheTags, noCache, ...countOptions } = options || {};
@@ -709,21 +757,23 @@ class KythiaModel extends Model {
         this.cacheStats.misses++;
         const count = await this.count(countOptions);
 
-        const tags = [`${this.name}`];
-        this.setCacheEntry(cacheKey, count, ttl, tags);
+        // Only cache if allowed
+        if (this.isRedisConnected || !this.isShardMode) {
+            const tags = [`${this.name}`];
+            this.setCacheEntry(cacheKey, count, ttl, tags);
+        }
         return count;
     }
 
     /**
      * 📦 An instance method that saves the current model instance to the database and then
      * intelligently updates its corresponding entry in the active cache.
-     * @returns {Promise<this>} The saved instance.
      */
     async saveAndUpdateCache() {
         const savedInstance = await this.save();
         const pk = this.constructor.primaryKeyAttribute;
         const pkValue = this[pk];
-        if (pkValue) {
+        if (pkValue && (this.constructor.isRedisConnected || !this.constructor.isShardMode)) {
             const cacheKey = this.constructor.getCacheKey({ [pk]: pkValue });
             const tags = [`${this.constructor.name}`, `${this.constructor.name}:${pk}:${pkValue}`];
             await this.constructor.setCacheEntry(cacheKey, savedInstance, undefined, tags);
@@ -734,7 +784,6 @@ class KythiaModel extends Model {
     /**
      * 📦 A convenience alias for `clearCache`. In the hybrid system, positive and negative
      * cache entries for the same key are managed together, so clearing one clears the other.
-     * @param {string|Object} keys - The query identifier to clear.
      */
     static async clearNegativeCache(keys) {
         return this.clearCache(keys);
@@ -742,10 +791,6 @@ class KythiaModel extends Model {
 
     /**
      * 📦 Fetches a raw aggregate result from the cache, falling back to the database.
-     * Ideal for caching results from functions like AVG, SUM, MAX etc.
-     * @param {Object} options - A Sequelize `findAll` options object, usually with `attributes` and `raw: true`.
-     * @param {Object} [cacheOptions={}] - Options for caching, like ttl and tags.
-     * @returns {Promise<*>} The raw result from the aggregation.
      */
     static async aggregateWithCache(options = {}, cacheOptions = {}) {
         const { cacheTags, noCache, ...queryOptions } = options || {};
@@ -762,21 +807,19 @@ class KythiaModel extends Model {
 
         const result = await this.findAll(queryOptions);
 
-        const tags = [`${this.name}`];
-        if (Array.isArray(cacheTags)) tags.push(...cacheTags);
-        this.setCacheEntry(cacheKey, result, ttl, tags);
+        // Only cache if allowed
+        if (this.isRedisConnected || !this.isShardMode) {
+            const tags = [`${this.name}`];
+            if (Array.isArray(cacheTags)) tags.push(...cacheTags);
+            this.setCacheEntry(cacheKey, result, ttl, tags);
+        }
 
         return result;
     }
 
     /**
      * 🪝 Attaches Sequelize lifecycle hooks (`afterSave`, `afterDestroy`, etc.) to this model.
-     * These hooks automatically and intelligently invalidate or update cache entries
-     * in the active cache engine (Redis or Map) whenever data changes.
-     * * ✨ [HYBRID AWARE]
-     * - If Redis is connected: Uses precise, tag-based "Sniper" invalidation.
-     * - If Redis is disconnected: Falls back to brute-force "Nuke" invalidation for
-     * the in-memory cache to guarantee data consistency.
+     * In shard mode, fallback invalidation does nothing.
      */
     static initializeCacheHooks() {
         if (!this.redis) {
@@ -799,7 +842,7 @@ class KythiaModel extends Model {
                     tagsToInvalidate.push(...modelClass.customInvalidationTags);
                 }
                 await modelClass.invalidateByTags(tagsToInvalidate);
-            } else {
+            } else if (!modelClass.isShardMode) {
                 modelClass._mapClearAllModelCache();
             }
         };
@@ -819,7 +862,7 @@ class KythiaModel extends Model {
                     tagsToInvalidate.push(...modelClass.customInvalidationTags);
                 }
                 await modelClass.invalidateByTags(tagsToInvalidate);
-            } else {
+            } else if (!modelClass.isShardMode) {
                 modelClass._mapClearAllModelCache();
             }
         };
@@ -827,7 +870,7 @@ class KythiaModel extends Model {
         const afterBulkLogic = async () => {
             if (this.isRedisConnected) {
                 await this.invalidateByTags([`${this.name}`]);
-            } else {
+            } else if (!this.isShardMode) {
                 this._mapClearAllModelCache();
             }
         };
@@ -843,7 +886,6 @@ class KythiaModel extends Model {
      * 🪝 Iterates through all registered Sequelize models and attaches the cache hooks
      * to any model that extends `KythiaModel`. This should be called once after all models
      * have been defined and loaded.
-     * @param {Sequelize} sequelizeInstance - The active Sequelize instance containing all models.
      */
     static attachHooksToAllModels(sequelizeInstance, client) {
         if (!this.redis) {
@@ -863,12 +905,6 @@ class KythiaModel extends Model {
 
     /**
      * 🔄 Touches (updates the timestamp of) a parent model instance.
-     * This is useful for updating parent records when child records change.
-     * @param {Object} childInstance - The child model instance that triggered the touch.
-     * @param {string} foreignKeyField - The field name in the child that references the parent's primary key.
-     * @param {typeof KythiaModel} ParentModel - The parent model class to touch.
-     * @param {string} [timestampField='updatedAt'] - The timestamp field to update on the parent.
-     * @returns {Promise<void>}
      */
     static async touchParent(childInstance, foreignKeyField, ParentModel, timestampField = 'updatedAt') {
         if (!childInstance || !childInstance[foreignKeyField]) {
@@ -891,11 +927,6 @@ class KythiaModel extends Model {
 
     /**
      * 🔄 Configures automatic parent touching on model hooks.
-     * This method sets up hooks that automatically update parent timestamps when child records change.
-     * @param {string} foreignKeyField - The field name in the child that references the parent's primary key.
-     * @param {typeof KythiaModel} ParentModel - The parent model class to touch.
-     * @param {string} [timestampField='updatedAt'] - The timestamp field to update on the parent.
-     * @returns {void}
      */
     static setupParentTouch(foreignKeyField, ParentModel, timestampField = 'updatedAt') {
         const touchHandler = (instance) => {
