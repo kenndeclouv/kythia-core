@@ -1,0 +1,9 @@
+# Development Config
+.prettierrc
+.versionrc.js
+commitlint.config.js
+jsconfig.json
+
+# Git specific
+.gitignore
+.gitattributes
