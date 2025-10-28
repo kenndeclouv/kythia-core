@@ -1,18 +1,10 @@
 /**
- * @namespace: src/database/KythiaSequelize.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
-/**
  * 🧠 Sequelize Connection Factory
  *
  * @file src/database/KythiaSequelize.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * Main Sequelize connection factory for the application
@@ -29,8 +21,7 @@ const { Sequelize } = require('sequelize');
  */
 function createSequelizeInstance(config, logger) {
     const dbConfig = config.db || {};
-    
-    // Get configuration from the injected config object
+
     const dialect = dbConfig.driver || process.env.DB_DRIVER;
     const dbName = dbConfig.name || process.env.DB_NAME;
     const dbUser = dbConfig.user || process.env.DB_USER;
@@ -61,7 +52,7 @@ function createSequelizeInstance(config, logger) {
         case 'sqlite':
             seqConfig.storage = dbStorage;
             break;
-            
+
         case 'mysql':
         case 'mariadb':
             seqConfig.host = dbHost;
@@ -70,7 +61,7 @@ function createSequelizeInstance(config, logger) {
                 seqConfig.dialectOptions = { socketPath: dbSocket };
             }
             break;
-            
+
         case 'postgres':
             seqConfig.host = dbHost;
             seqConfig.port = dbPort;
@@ -80,21 +71,19 @@ function createSequelizeInstance(config, logger) {
                 };
             }
             break;
-            
+
         case 'mssql':
             seqConfig.host = dbHost;
             seqConfig.port = dbPort;
             if (dbDialectOptions) {
                 try {
-                    seqConfig.dialectOptions = typeof dbDialectOptions === 'string' 
-                        ? JSON.parse(dbDialectOptions) 
-                        : dbDialectOptions;
+                    seqConfig.dialectOptions = typeof dbDialectOptions === 'string' ? JSON.parse(dbDialectOptions) : dbDialectOptions;
                 } catch (e) {
                     logger.error('Error parsing dialect options:', e.message);
                 }
             }
             break;
-            
+
         default:
             throw new Error(`${dialect} is not supported or not configured.`);
     }

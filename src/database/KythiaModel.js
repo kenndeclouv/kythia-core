@@ -1,18 +1,10 @@
 /**
- * @namespace: src/database/KythiaModel.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
-/**
  * 🚀 Caching Layer for Sequelize Models (Hybrid Redis + In-Memory Fallback Edition, Sniper Mode)
  *
  * @file src/database/KythiaModel.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * The ultimate, high-availability caching layer. It prioritizes a central Redis cache for speed and
@@ -199,13 +191,10 @@ class KythiaModel extends Model {
         this.lastAutoReconnectTs = Date.now();
         this.logger.warn(`🟢 [REDIS] Attempting auto-reconnect after ${RECONNECT_DELAY_MINUTES}min downtime...`);
 
-        this.reconnectTimeout = setTimeout(
-            () => {
-                this.reconnectTimeout = null;
-                this.initializeRedis(this.lastRedisOpts);
-            },
-            RECONNECT_DELAY_MINUTES * 60 * 1000
-        );
+        this.reconnectTimeout = setTimeout(() => {
+            this.reconnectTimeout = null;
+            this.initializeRedis(this.lastRedisOpts);
+        }, RECONNECT_DELAY_MINUTES * 60 * 1000);
     }
 
     /**
@@ -508,6 +497,33 @@ class KythiaModel extends Model {
     }
 
     /**
+     * 🗺️ (Private) Clears all in-memory cache entries for this model.
+     * Used as a fallback when Redis is disconnected.
+     * @private
+     */
+    static _mapClearAllModelCache() {
+        const prefix = `${this.CACHE_VERSION}:${this.name}:`;
+        let cleared = 0;
+
+        for (const key of this.localCache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.localCache.delete(key);
+                cleared++;
+            }
+        }
+        for (const key of this.localNegativeCache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.localNegativeCache.delete(key);
+                cleared++;
+            }
+        }
+
+        if (cleared > 0) {
+            this.logger.info(`♻️ [MAP CACHE] Cleared ${cleared} in-memory entries for ${this.name} (Redis fallback).`);
+        }
+    }
+
+    /**
      * 🔄 (Internal) Standardizes various query object formats into a consistent Sequelize options object.
      * This helper ensures that `getCache({ id: 1 })` and `getCache({ where: { id: 1 } })` are treated identically.
      * @param {Object} options - The user-provided query options.
@@ -757,7 +773,10 @@ class KythiaModel extends Model {
      * 🪝 Attaches Sequelize lifecycle hooks (`afterSave`, `afterDestroy`, etc.) to this model.
      * These hooks automatically and intelligently invalidate or update cache entries
      * in the active cache engine (Redis or Map) whenever data changes.
-     * Now uses Sniper tag-based invalidation.
+     * * ✨ [HYBRID AWARE]
+     * - If Redis is connected: Uses precise, tag-based "Sniper" invalidation.
+     * - If Redis is disconnected: Falls back to brute-force "Nuke" invalidation for
+     * the in-memory cache to guarantee data consistency.
      */
     static initializeCacheHooks() {
         if (!this.redis) {
@@ -765,38 +784,52 @@ class KythiaModel extends Model {
             return;
         }
 
-        const broadcastInvalidation = (/* keysToClear */) => {};
-
+        /**
+         * Logika setelah data disimpan (Create atau Update)
+         */
         const afterSaveLogic = async (instance) => {
             const modelClass = instance.constructor;
-            const tagsToInvalidate = [`${modelClass.name}`];
 
-            const pk = modelClass.primaryKeyAttribute;
-            tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
+            if (modelClass.isRedisConnected) {
+                const tagsToInvalidate = [`${modelClass.name}`];
+                const pk = modelClass.primaryKeyAttribute;
+                tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
 
-            if (Array.isArray(modelClass.customInvalidationTags)) {
-                tagsToInvalidate.push(...modelClass.customInvalidationTags);
+                if (Array.isArray(modelClass.customInvalidationTags)) {
+                    tagsToInvalidate.push(...modelClass.customInvalidationTags);
+                }
+                await modelClass.invalidateByTags(tagsToInvalidate);
+            } else {
+                modelClass._mapClearAllModelCache();
             }
-
-            await modelClass.invalidateByTags(tagsToInvalidate);
         };
 
+        /**
+         * Logika setelah data dihapus
+         */
         const afterDestroyLogic = async (instance) => {
             const modelClass = instance.constructor;
-            const tagsToInvalidate = [`${modelClass.name}`];
 
-            const pk = modelClass.primaryKeyAttribute;
-            tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
+            if (modelClass.isRedisConnected) {
+                const tagsToInvalidate = [`${modelClass.name}`];
+                const pk = modelClass.primaryKeyAttribute;
+                tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
 
-            if (Array.isArray(modelClass.customInvalidationTags)) {
-                tagsToInvalidate.push(...modelClass.customInvalidationTags);
+                if (Array.isArray(modelClass.customInvalidationTags)) {
+                    tagsToInvalidate.push(...modelClass.customInvalidationTags);
+                }
+                await modelClass.invalidateByTags(tagsToInvalidate);
+            } else {
+                modelClass._mapClearAllModelCache();
             }
-
-            await modelClass.invalidateByTags(tagsToInvalidate);
         };
 
         const afterBulkLogic = async () => {
-            await this.invalidateByTags([`${this.name}`]);
+            if (this.isRedisConnected) {
+                await this.invalidateByTags([`${this.name}`]);
+            } else {
+                this._mapClearAllModelCache();
+            }
         };
 
         this.addHook('afterSave', afterSaveLogic);

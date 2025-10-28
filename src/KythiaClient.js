@@ -1,11 +1,3 @@
-/**
- * @namespace: src/KythiaClient.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
 const { Client, GatewayIntentBits, Partials, Options } = require('discord.js');
 
 module.exports = function kythiaClient() {

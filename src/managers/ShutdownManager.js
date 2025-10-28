@@ -4,7 +4,7 @@
  * @file src/managers/ShutdownManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * Handles graceful shutdown procedures including interval tracking,
@@ -125,9 +125,7 @@ class ShutdownManager {
                             const rawComponents = msg.components.map((c) => c.toJSON());
                             const disabledComponents = disableRecursively(rawComponents);
                             editPromises.push(msg.edit({ components: disabledComponents }).catch(() => {}));
-                        } catch (e) {
-                            /* Abaikan */
-                        }
+                        } catch (e) {}
                     }
                     await Promise.allSettled(editPromises);
                 }

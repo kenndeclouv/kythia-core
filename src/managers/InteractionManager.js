@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -116,7 +116,6 @@ class InteractionManager {
             return interaction.reply({ content: await this.t(interaction, 'common.error.command.not.found'), ephemeral: true });
         }
 
-        // Feature flag check
         if (interaction.inGuild()) {
             const category = this.commandCategoryMap.get(interaction.commandName);
             const featureFlag = this.categoryToFeatureMap.get(category);
@@ -132,7 +131,6 @@ class InteractionManager {
             }
         }
 
-        // Permission checks
         if (command.guildOnly && !interaction.inGuild()) {
             return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), ephemeral: true });
         }
@@ -160,7 +158,6 @@ class InteractionManager {
                 });
         }
 
-        // Vote lock check
         if (command.voteLocked && !this.isOwner(interaction.user.id)) {
             const voter = await this.KythiaVoter.getCache({ userId: interaction.user.id });
             const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
@@ -197,7 +194,6 @@ class InteractionManager {
             }
         }
 
-        // Cooldown check
         const cooldownDuration = command.cooldown ?? this.kythiaConfig.bot.globalCommandCooldown ?? 0;
 
         if (cooldownDuration > 0 && !this.isOwner(interaction.user.id)) {
@@ -276,7 +272,6 @@ class InteractionManager {
      * @private
      */
     async _handleModalSubmit(interaction) {
-        // Handle both | and : separators for modal custom IDs
         const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
         this.logger.info('Modal submit - customId:', interaction.customId, 'prefix:', customIdPrefix);
         const handler = this.modalHandlers.get(customIdPrefix);

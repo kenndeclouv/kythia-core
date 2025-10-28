@@ -1,11 +1,3 @@
-/**
- * @namespace: src/utils/color.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
 const discordColors = {
     Default: 0x000000,
     White: 0xffffff,
@@ -47,7 +39,6 @@ const discordColors = {
  * @returns {string|number|{r:number,g:number,b:number}} The converted color.
  */
 function convertColor(input, { from, to }) {
-    // Helper: hex to rgb
     function hexToRgb(hex) {
         let h = hex.replace(/^#/, '');
         if (h.length === 3) {
@@ -64,7 +55,6 @@ function convertColor(input, { from, to }) {
         };
     }
 
-    // Helper: rgb to hex
     function rgbToHex({ r, g, b }) {
         if (
             typeof r !== 'number' ||
@@ -90,7 +80,6 @@ function convertColor(input, { from, to }) {
         );
     }
 
-    // Helper: hex to decimal (returns 0xRRGGBB)
     function hexToDecimal(hex) {
         let h = hex.replace(/^#/, '');
         if (h.length === 3) {
@@ -103,7 +92,6 @@ function convertColor(input, { from, to }) {
         return Number('0x' + h.toUpperCase());
     }
 
-    // Helper: decimal to hex
     function decimalToHex(decimal) {
         if (typeof decimal !== 'number' || decimal < 0 || decimal > 0xffffff) throw new Error('Invalid decimal color');
         let hex = decimal.toString(16).toUpperCase();
@@ -111,7 +99,6 @@ function convertColor(input, { from, to }) {
         return '#' + hex;
     }
 
-    // Helper: rgb to decimal (returns 0xRRGGBB)
     function rgbToDecimal({ r, g, b }) {
         if (
             typeof r !== 'number' ||
@@ -128,7 +115,6 @@ function convertColor(input, { from, to }) {
         return (r << 16) + (g << 8) + b;
     }
 
-    // Helper: decimal to rgb
     function decimalToRgb(decimal) {
         if (typeof decimal !== 'number' || decimal < 0 || decimal > 0xffffff) throw new Error('Invalid decimal color');
         return {
@@ -138,7 +124,6 @@ function convertColor(input, { from, to }) {
         };
     }
 
-    // Main conversion logic
     if (from === to) return input;
 
     let rgb, hex, decimal;
@@ -161,12 +146,10 @@ function convertColor(input, { from, to }) {
             break;
         case 'discord':
             if (typeof input === 'string') {
-                // Case-insensitive key matching for flexibility
                 const key = Object.keys(discordColors).find((k) => k.toLowerCase() === input.toLowerCase());
                 if (!key) throw new Error(`Invalid Discord color name: ${input}`);
                 decimal = discordColors[key];
             } else if (typeof input === 'number') {
-                // If already a number (decimal), use directly
                 decimal = input;
             } else {
                 throw new Error('Invalid input type for Discord color');

@@ -4,7 +4,7 @@
  * @file src/managers/AddonManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * Handles all addon loading, command registration, and component management.
@@ -28,7 +28,6 @@ class AddonManager {
         this.container = container;
         this.logger = this.container.logger;
 
-        // Handler maps
         this.buttonHandlers = new Map();
         this.modalHandlers = new Map();
         this.selectMenuHandlers = new Map();
@@ -214,7 +213,6 @@ class AddonManager {
             const loadedEventsSummary = [];
             const loadedRegisterSummary = [];
 
-            // Load commands
             const commandsPath = path.join(addonDir, 'commands');
             if (fs.existsSync(commandsPath)) {
                 try {
@@ -231,7 +229,6 @@ class AddonManager {
                 }
             }
 
-            // Load register.js
             const registerPath = path.join(addonDir, 'register.js');
             if (fs.existsSync(registerPath)) {
                 try {
@@ -247,7 +244,6 @@ class AddonManager {
                 }
             }
 
-            // Load events
             const eventsPath = path.join(addonDir, 'events');
             if (fs.existsSync(eventsPath)) {
                 const eventFiles = fs.readdirSync(eventsPath).filter((file) => file.endsWith('.js'));
@@ -537,7 +533,6 @@ class AddonManager {
                             commandBuilder.setDescriptionLocalizations(descriptionLocalizations);
                         }
 
-                        // Handle subcommand localizations
                         this._applySubcommandLocalizations(commandBuilder, commandName, allLocales);
                     } catch (e) {
                         this.logger.warn(`Failed to load localizations for command "${commandName}": ${e.message}`);

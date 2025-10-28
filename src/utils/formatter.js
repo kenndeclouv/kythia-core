@@ -1,12 +1,4 @@
 /**
- * @namespace: src/utils/formatter.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
-/**
  * Converts a string to a small-caps-like Unicode alphabet variant.
  * @param {string} text - Input text.
  * @returns {string} Converted text using tiny letters.

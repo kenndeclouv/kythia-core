@@ -1,18 +1,10 @@
 /**
- * @namespace: src/database/KythiaORM.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
-/**
  * 🧠 Smart Sequelize Sync Utility
  *
  * @file src/database/KythiaORM.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * A utility for intelligent, hash-based syncing of Sequelize models.
@@ -140,24 +132,16 @@ function loadAllAddonModels(rootDir, sequelize, logger) {
             for (const file of files) {
                 const modelPath = path.join(modelsDir, file);
                 try {
-                    // modelClass adalah Class (misal: class ServerSetting extends KythiaModel)
                     const modelClass = require(modelPath);
 
-                    // Pastikan dia Class yang bener
                     if (modelClass && typeof modelClass.init === 'function') {
-                        
-                        // ===== INI KODE YANG BENAR =====
-                        // Panggil 'init' kustom yang ada di file model (spt User.js)
-                        // dan oper 'sequelize' instance-nya.
                         modelClass.init(sequelize);
-                        // ===============================
 
                         logger.info(`  └─> Initialized model: ${file}`);
                     } else {
                         logger.warn(`  └─> File ${file} is not a valid model class, skipping init.`);
                     }
                 } catch (err) {
-                    // Tangkap error 'define' di sini
                     logger.error(`  └─> ❌ Failed to load or init model: ${file}`, err.message);
                 }
             }

@@ -1,18 +1,10 @@
 /**
- * @namespace: src/Kythia.js
- * @type: Module
- * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
- * @version 0.9.10-beta
- */
-
-/**
  * 🤖 Main Kythia Entrypoint
  *
  * @file src/Kythia.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.10-beta
+ * @version 0.9.1-beta
  *
  * @description
  * This file contains the main Bot class - acting as an orchestrator (CEO) that
@@ -389,7 +381,7 @@ class Kythia {
                 logger: this.dbDependencies.logger,
                 config: this.dbDependencies.config,
             });
-            
+
             this.logger.info('🔄 Hydrating container with initialized models...');
             this.container.models = sequelize.models;
 
