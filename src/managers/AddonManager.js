@@ -4,7 +4,7 @@
  * @file src/managers/AddonManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.2-beta
+ * @version 0.9.3-beta
  *
  * @description
  * Handles all addon loading, command registration, and component management.
@@ -12,13 +12,20 @@
  * events, buttons, modals, and other components from addons.
  */
 
-const { SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder, Collection } = require('discord.js');
+const {
+    SlashCommandBuilder,
+    SlashCommandSubcommandBuilder,
+    SlashCommandSubcommandGroupBuilder,
+    Collection,
+    ContextMenuCommandBuilder,
+    ApplicationCommandType,
+} = require('discord.js');
 const path = require('path');
 const fs = require('fs');
 
 class AddonManager {
     /**
-     * 🏗️ AddonManager Constructor
+     * 🗝️ AddonManager Constructor
      * Initializes the addon manager with necessary collections and maps.
      * @param {Object} client - Discord client instance
      * @param {Object} container - Dependency container
@@ -65,7 +72,7 @@ class AddonManager {
     }
 
     /**
-     * 🔍 Register Autocomplete Handler
+     * 📋 Register Autocomplete Handler
      * Registers a handler for autocomplete interactions for a specific command or subcommand.
      * @param {string} commandName - The command or subcommand key
      * @param {Function} handler - The autocomplete handler function
@@ -75,6 +82,74 @@ class AddonManager {
             this.logger.warn(`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists and will be overwritten.`);
         }
         this.autocompleteHandlers.set(commandName, handler);
+    }
+
+    /**
+     * 🔍 Check if module is a BaseCommand class
+     * @param {any} module - The module to check
+     * @returns {boolean} True if module is a class extending BaseCommand
+     * @private
+     */
+    _isBaseCommandClass(module) {
+        if (typeof module !== 'function') return false;
+        if (!module.prototype) return false;
+
+        const hasExecute = typeof module.prototype.execute === 'function';
+        return hasExecute;
+    }
+
+    /**
+     * 🏗️ Instantiate and prepare BaseCommand class
+     * @param {Function} CommandClass - The command class to instantiate
+     * @returns {Object} Command instance with proper structure
+     * @private
+     */
+    _instantiateBaseCommand(CommandClass) {
+        try {
+            return new CommandClass(this.container);
+        } catch (error) {
+            this.logger.error(`Failed to instantiate BaseCommand class:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * INTERNAL: Creates a Builder instance (Slash, Subcommand, Group) from a module's data property.
+     * @param {Object} data - The data property (can be function, builder, or object)
+     * @param {Class} BuilderClass - The d.js class to use (SlashCommandBuilder, etc.)
+     * @returns {SlashCommandBuilder|SlashCommandSubcommandBuilder|SlashCommandSubcommandGroupBuilder}
+     * @private
+     */
+    _createBuilderFromData(data, BuilderClass) {
+        let builder = new BuilderClass();
+
+        if (typeof data === 'function') {
+            data(builder);
+        } else if (data instanceof BuilderClass) {
+            builder = data;
+        } else if (typeof data === 'object') {
+            builder.setName(data.name || 'unnamed');
+            builder.setDescription(data.description || 'No description');
+
+            if (BuilderClass === SlashCommandBuilder) {
+                builder.setDescription(data.description || 'No description');
+                if (data.permissions) {
+                    builder.setDefaultMemberPermissions(data.permissions);
+                }
+                if (data.guildOnly !== undefined) {
+                    builder.setDMPermission(!data.guildOnly);
+                }
+            } else if (BuilderClass === ContextMenuCommandBuilder) {
+                builder.setType(data.type || ApplicationCommandType.User);
+                if (data.permissions) {
+                    builder.setDefaultMemberPermissions(data.permissions);
+                }
+                if (data.guildOnly !== undefined) {
+                    builder.setDMPermission(!data.guildOnly);
+                }
+            }
+        }
+        return builder;
     }
 
     /**
@@ -89,14 +164,21 @@ class AddonManager {
      * @returns {Object|null} Summary object for logging, or null if not registered
      */
     registerCommand(module, filePath, commandNamesSet, commandDataForDeployment, permissionDefaults = {}, options = {}) {
+        if (this._isBaseCommandClass(module)) {
+            module = this._instantiateBaseCommand(module);
+        }
+
         if (!module || !module.data) return null;
 
-        let commandBuilder = new SlashCommandBuilder();
-        if (typeof module.data === 'function') {
-            module.data(commandBuilder);
+        let builderClass;
+
+        if (module.data instanceof ContextMenuCommandBuilder) {
+            builderClass = ContextMenuCommandBuilder;
         } else {
-            commandBuilder = module.data;
+            builderClass = SlashCommandBuilder;
         }
+
+        let commandBuilder = this._createBuilderFromData(module.data, builderClass);
 
         const commandName = commandBuilder.name;
         const category = options.folderName || path.basename(path.dirname(filePath));
@@ -305,13 +387,19 @@ class AddonManager {
     }
 
     /**
-     * Load top-level command group
+     * Load top-level command group (supports BaseCommand classes)
      * @private
      */
     async _loadTopLevelCommandGroup(commandsPath, addon, addonPermissionDefaults, commandNamesSet, commandDataForDeployment) {
         const loadedCommandsSummary = [];
-        const commandDef = require(path.join(commandsPath, '_command.js'));
-        const mainBuilder = commandDef.data;
+        let commandDef = require(path.join(commandsPath, '_command.js'));
+
+        if (this._isBaseCommandClass(commandDef)) {
+            commandDef = this._instantiateBaseCommand(commandDef);
+        }
+
+        let mainBuilder = this._createBuilderFromData(commandDef.data, SlashCommandBuilder);
+
         const mainCommandName = mainBuilder.name;
 
         if (commandDef.featureFlag) {
@@ -336,15 +424,26 @@ class AddonManager {
             const itemPath = path.join(commandsPath, item.name);
 
             if (item.isFile() && item.name.endsWith('.js') && !item.name.startsWith('_')) {
-                const subModule = require(itemPath);
-                if (subModule.subcommand !== true) continue;
-                if (!subModule.data || typeof subModule.data !== 'function') continue;
+                let subModule = require(itemPath);
 
-                const subBuilder = new SlashCommandSubcommandBuilder();
-                subModule.data(subBuilder);
+                const isSubcommand = subModule.subcommand === true || this._isBaseCommandClass(subModule);
+
+                if (this._isBaseCommandClass(subModule)) {
+                    subModule = this._instantiateBaseCommand(subModule);
+                }
+
+                if (!isSubcommand) continue;
+                if (!subModule.data) continue;
+
+                const subBuilder = this._createBuilderFromData(subModule.data, SlashCommandSubcommandBuilder);
 
                 mainBuilder.addSubcommand(subBuilder);
-                this.client.commands.set(`${mainCommandName} ${subBuilder.name}`, { ...commandDef, ...subModule });
+                this.client.commands.set(`${mainCommandName} ${subBuilder.name}`, subModule);
+
+                if (typeof subModule.autocomplete === 'function') {
+                    this.registerAutocompleteHandler(`${mainCommandName} ${subBuilder.name}`, subModule.autocomplete);
+                }
+
                 loadedSubcommandsSummary.push(subBuilder.name);
             } else if (item.isDirectory()) {
                 const groupDefPath = path.join(itemPath, '_group.js');
@@ -354,28 +453,40 @@ class AddonManager {
                 }
 
                 try {
-                    const groupModule = require(groupDefPath);
-                    if (!groupModule.data || typeof groupModule.data !== 'function') continue;
+                    let groupModule = require(groupDefPath);
 
-                    const groupBuilder = new SlashCommandSubcommandGroupBuilder();
-                    groupModule.data(groupBuilder);
+                    if (this._isBaseCommandClass(groupModule)) {
+                        groupModule = this._instantiateBaseCommand(groupModule);
+                    }
+
+                    if (!groupModule.data) continue;
+
+                    const groupBuilder = this._createBuilderFromData(groupModule.data, SlashCommandSubcommandGroupBuilder);
 
                     const subcommandsInGroupSummary = [];
                     const subCommandFiles = fs.readdirSync(itemPath).filter((f) => f.endsWith('.js') && !f.startsWith('_'));
 
                     for (const file of subCommandFiles) {
                         const subCommandPath = path.join(itemPath, file);
-                        const subModule = require(subCommandPath);
-                        if (!subModule.data || typeof subModule.data !== 'function') continue;
+                        let subModule = require(subCommandPath);
 
-                        const subBuilder = new SlashCommandSubcommandBuilder();
-                        subModule.data(subBuilder);
+                        if (this._isBaseCommandClass(subModule)) {
+                            subModule = this._instantiateBaseCommand(subModule);
+                        }
+
+                        if (!subModule.data) continue;
+
+                        const subBuilder = this._createBuilderFromData(subModule.data, SlashCommandSubcommandBuilder);
 
                         groupBuilder.addSubcommand(subBuilder);
 
                         const commandKey = `${mainCommandName} ${groupBuilder.name} ${subBuilder.name}`;
 
-                        this.client.commands.set(commandKey, { ...commandDef, ...groupModule, ...subModule });
+                        this.client.commands.set(commandKey, subModule);
+
+                        if (typeof subModule.autocomplete === 'function') {
+                            this.registerAutocompleteHandler(commandKey, subModule.autocomplete);
+                        }
 
                         subcommandsInGroupSummary.push(subBuilder.name);
                     }
@@ -396,7 +507,7 @@ class AddonManager {
     }
 
     /**
-     * Load individual commands
+     * Load individual commands (supports BaseCommand classes)
      * @private
      */
     async _loadIndividualCommands(commandsPath, addon, addonPermissionDefaults, commandNamesSet, commandDataForDeployment) {
@@ -407,14 +518,11 @@ class AddonManager {
             const itemPath = path.join(commandsPath, item.name);
 
             if (item.isDirectory() && fs.existsSync(path.join(itemPath, '_command.js'))) {
-                const commandDef = require(path.join(itemPath, '_command.js'));
-                let mainBuilder;
-                if (typeof commandDef.data === 'function') {
-                    mainBuilder = new SlashCommandBuilder();
-                    commandDef.data(mainBuilder);
-                } else {
-                    mainBuilder = commandDef.data;
+                let commandDef = require(path.join(itemPath, '_command.js'));
+                if (this._isBaseCommandClass(commandDef)) {
+                    commandDef = this._instantiateBaseCommand(commandDef);
                 }
+                let mainBuilder = this._createBuilderFromData(commandDef.data, SlashCommandBuilder);
                 const mainCommandName = mainBuilder.name;
 
                 if (commandDef.featureFlag) {
@@ -424,7 +532,6 @@ class AddonManager {
                 if (commandNamesSet.has(mainCommandName)) throw new Error(`Duplicate name: ${mainCommandName}`);
                 commandNamesSet.add(mainCommandName);
                 this.client.commands.set(mainCommandName, commandDef);
-
                 if (typeof commandDef.autocomplete === 'function') {
                     this.registerAutocompleteHandler(mainCommandName, commandDef.autocomplete);
                 }
@@ -434,59 +541,45 @@ class AddonManager {
 
                 for (const content of groupContents) {
                     const contentPath = path.join(itemPath, content.name);
-                    if (content.isFile() && content.name.endsWith('.js') && !content.name.startsWith('_')) {
-                        const subModule = require(contentPath);
-                        if (!subModule.data) continue;
-                        let subBuilder = new SlashCommandSubcommandBuilder();
-                        if (typeof subModule.data === 'function') {
-                            subModule.data(subBuilder);
-                        } else {
-                            subBuilder = subModule.data;
-                        }
-                        mainBuilder.addSubcommand(subBuilder);
-                        this.client.commands.set(`${mainCommandName} ${subBuilder.name}`, { ...commandDef, ...subModule });
 
+                    if (content.isFile() && content.name.endsWith('.js') && !content.name.startsWith('_')) {
+                        let subModule = require(contentPath);
+                        if (this._isBaseCommandClass(subModule)) {
+                            subModule = this._instantiateBaseCommand(subModule);
+                        }
+                        if (!subModule.data) continue;
+                        let subBuilder = this._createBuilderFromData(subModule.data, SlashCommandSubcommandBuilder);
+                        mainBuilder.addSubcommand(subBuilder);
+                        this.client.commands.set(`${mainCommandName} ${subBuilder.name}`, subModule);
                         if (typeof subModule.autocomplete === 'function') {
                             this.registerAutocompleteHandler(`${mainCommandName} ${subBuilder.name}`, subModule.autocomplete);
                         }
-
                         subcommandsList.push(subBuilder.name);
                     } else if (content.isDirectory() && fs.existsSync(path.join(contentPath, '_group.js'))) {
-                        const groupDef = require(path.join(contentPath, '_group.js'));
-                        let groupBuilder = new SlashCommandSubcommandGroupBuilder();
-                        if (typeof groupDef.data === 'function') {
-                            groupDef.data(groupBuilder);
-                        } else {
-                            groupBuilder = groupDef.data;
+                        let groupDef = require(path.join(contentPath, '_group.js'));
+                        if (this._isBaseCommandClass(groupDef)) {
+                            groupDef = this._instantiateBaseCommand(groupDef);
                         }
+                        let groupBuilder = this._createBuilderFromData(groupDef.data, SlashCommandSubcommandGroupBuilder);
                         const subGroupList = [];
                         const subGroupContents = fs.readdirSync(contentPath, { withFileTypes: true });
-
                         for (const subSubItem of subGroupContents) {
                             if (subSubItem.isFile() && subSubItem.name.endsWith('.js') && !subSubItem.name.startsWith('_')) {
                                 const subSubPath = path.join(contentPath, subSubItem.name);
-                                const subSubModule = require(subSubPath);
-                                if (!subSubModule.data) continue;
-                                let subSubBuilder = new SlashCommandSubcommandBuilder();
-                                if (typeof subSubModule.data === 'function') {
-                                    subSubModule.data(subSubBuilder);
-                                } else {
-                                    subSubBuilder = subSubModule.data;
+                                let subSubModule = require(subSubPath);
+                                if (this._isBaseCommandClass(subSubModule)) {
+                                    subSubModule = this._instantiateBaseCommand(subSubModule);
                                 }
+                                if (!subSubModule.data) continue;
+                                let subSubBuilder = this._createBuilderFromData(subSubModule.data, SlashCommandSubcommandBuilder);
                                 groupBuilder.addSubcommand(subSubBuilder);
-                                this.client.commands.set(`${mainCommandName} ${groupBuilder.name} ${subSubBuilder.name}`, {
-                                    ...commandDef,
-                                    ...groupDef,
-                                    ...subSubModule,
-                                });
-
+                                this.client.commands.set(`${mainCommandName} ${groupBuilder.name} ${subSubBuilder.name}`, subSubModule);
                                 if (typeof subSubModule.autocomplete === 'function') {
                                     this.registerAutocompleteHandler(
                                         `${mainCommandName} ${groupBuilder.name} ${subSubBuilder.name}`,
                                         subSubModule.autocomplete
                                     );
                                 }
-
                                 subGroupList.push(subSubBuilder.name);
                             }
                         }
@@ -497,74 +590,82 @@ class AddonManager {
                 commandDataForDeployment.push(mainBuilder.toJSON());
                 loadedCommandsSummary.push({ type: 'group', name: mainCommandName, subcommands: subcommandsList });
             } else if (item.isFile() && item.name.endsWith('.js') && !item.name.startsWith('_')) {
-                const commandModule = require(itemPath);
-                if (commandModule.subcommand) continue;
-                let summary = null;
+                let commandModule = require(itemPath);
+                let isClass = false;
+                if (this._isBaseCommandClass(commandModule)) {
+                    commandModule = this._instantiateBaseCommand(commandModule);
+                    isClass = true;
+                }
+
+                if (!isClass && commandModule.subcommand) continue;
+
+                let summarySlash = null;
+                let summaryContext = null;
 
                 if (commandModule.slashCommand) {
-                    const commandBuilder = commandModule.slashCommand;
-                    const commandName = commandBuilder.name;
-
+                    const builder = commandModule.slashCommand;
+                    const name = builder.name;
                     try {
                         const allLocales = this.container.translator.getLocales();
-
                         let nameLocalizations = {};
                         let descriptionLocalizations = {};
                         if (typeof allLocales.entries === 'function') {
                             for (const [lang, translations] of allLocales.entries()) {
-                                const nameKey = `command_${commandName}_name`;
-                                const descKey = `command_${commandName}_desc`;
+                                const nameKey = `command_${name}_name`;
+                                const descKey = `command_${name}_desc`;
                                 if (translations[nameKey]) nameLocalizations[lang] = translations[nameKey];
                                 if (translations[descKey]) descriptionLocalizations[lang] = translations[descKey];
                             }
                         } else {
                             for (const lang in allLocales) {
                                 const translations = allLocales[lang];
-                                const nameKey = `command_${commandName}_name`;
-                                const descKey = `command_${commandName}_desc`;
+                                const nameKey = `command_${name}_name`;
+                                const descKey = `command_${name}_desc`;
                                 if (translations[nameKey]) nameLocalizations[lang] = translations[nameKey];
                                 if (translations[descKey]) descriptionLocalizations[lang] = translations[descKey];
                             }
                         }
                         if (Object.keys(nameLocalizations).length > 0) {
-                            commandBuilder.setNameLocalizations(nameLocalizations);
+                            builder.setNameLocalizations(nameLocalizations);
                         }
                         if (Object.keys(descriptionLocalizations).length > 0) {
-                            commandBuilder.setDescriptionLocalizations(descriptionLocalizations);
+                            builder.setDescriptionLocalizations(descriptionLocalizations);
                         }
-
-                        this._applySubcommandLocalizations(commandBuilder, commandName, allLocales);
+                        this._applySubcommandLocalizations(builder, name, allLocales);
                     } catch (e) {
-                        this.logger.warn(`Failed to load localizations for command "${commandName}": ${e.message}`);
+                        this.logger.warn(`Failed to load localizations for command "${name}": ${e.message}`);
                     }
 
-                    if (commandNamesSet.has(commandName)) {
-                        this.logger.warn(`Duplicate command name detected: "${commandName}" in ${itemPath}`);
+                    if (commandNamesSet.has(name)) {
+                        this.logger.warn(`Duplicate command name detected: "${name}" in ${itemPath}`);
                     } else {
-                        commandNamesSet.add(commandName);
-                        this.client.commands.set(commandName, commandModule);
+                        commandNamesSet.add(name);
+
+                        this.client.commands.set(name, commandModule);
                     }
-                    commandDataForDeployment.push(commandBuilder.toJSON());
-                    summary = { type: 'single', name: commandName, folder: addon.name, kind: 'slash' };
-                    if (summary) loadedCommandsSummary.push(summary);
-                    this.commandCategoryMap.set(commandName, addon.name);
+                    commandDataForDeployment.push(builder.toJSON());
+                    summarySlash = { type: 'single', name: name, folder: addon.name, kind: 'slash' };
+                    if (summarySlash) loadedCommandsSummary.push(summarySlash);
+                    this.commandCategoryMap.set(name, addon.name);
                 }
 
                 if (commandModule.contextMenuCommand) {
-                    const commandName = commandModule.contextMenuCommand.name;
-                    if (commandNamesSet.has(commandName) && !commandModule.slashCommand) {
-                        this.logger.warn(`Duplicate command name detected: "${commandName}" in ${itemPath}`);
+                    const builder = commandModule.contextMenuCommand;
+                    const name = builder.name;
+                    if (commandNamesSet.has(name) && !commandModule.slashCommand) {
+                        this.logger.warn(`Duplicate command name detected: "${name}" in ${itemPath}`);
                     } else {
-                        if (!commandNamesSet.has(commandName)) commandNamesSet.add(commandName);
-                        this.client.commands.set(commandName, commandModule);
+                        if (!commandNamesSet.has(name)) commandNamesSet.add(name);
+
+                        this.client.commands.set(name, commandModule);
                     }
-                    commandDataForDeployment.push(commandModule.contextMenuCommand.toJSON());
-                    summary = { type: 'single', name: commandName, folder: addon.name, kind: 'contextMenu' };
-                    if (summary) loadedCommandsSummary.push(summary);
+                    commandDataForDeployment.push(builder.toJSON());
+                    summaryContext = { type: 'single', name: name, folder: addon.name, kind: 'contextMenu' };
+                    if (summaryContext) loadedCommandsSummary.push(summaryContext);
                 }
 
-                if (!commandModule.slashCommand && !commandModule.contextMenuCommand) {
-                    summary = this.registerCommand(
+                if (!isClass && !commandModule.slashCommand && !commandModule.contextMenuCommand) {
+                    const summary = this.registerCommand(
                         commandModule,
                         itemPath,
                         commandNamesSet,
@@ -578,71 +679,76 @@ class AddonManager {
                 const files = fs.readdirSync(itemPath).filter((f) => f.endsWith('.js') && !f.startsWith('_'));
                 for (const file of files) {
                     const filePath = path.join(itemPath, file);
-                    const commandModule = require(filePath);
-                    let summary = null;
+                    let commandModule = require(filePath);
+                    let isClass = false;
+                    if (this._isBaseCommandClass(commandModule)) {
+                        commandModule = this._instantiateBaseCommand(commandModule);
+                        isClass = true;
+                    }
+
+                    if (!isClass && commandModule.subcommand) continue;
+
+                    let summarySlash = null;
+                    let summaryContext = null;
 
                     if (commandModule.slashCommand) {
-                        const commandBuilder = commandModule.slashCommand;
-                        const commandName = commandBuilder.name;
-                        if (commandModule.subcommand) continue;
-
+                        const builder = commandModule.slashCommand;
+                        const name = builder.name;
                         try {
                             const allLocales = this.container.translator.getLocales();
-
                             let nameLocalizations = {};
                             let descriptionLocalizations = {};
                             if (typeof allLocales.entries === 'function') {
                                 for (const [lang, translations] of allLocales.entries()) {
-                                    const nameKey = `command_${commandName}_name`;
-                                    const descKey = `command_${commandName}_desc`;
+                                    const nameKey = `command_${name}_name`;
+                                    const descKey = `command_${name}_desc`;
                                     if (translations[nameKey]) nameLocalizations[lang] = translations[nameKey];
                                     if (translations[descKey]) descriptionLocalizations[lang] = translations[descKey];
                                 }
                             } else {
                                 for (const lang in allLocales) {
                                     const translations = allLocales[lang];
-                                    const nameKey = `command_${commandName}_name`;
-                                    const descKey = `command_${commandName}_desc`;
+                                    const nameKey = `command_${name}_name`;
+                                    const descKey = `command_${name}_desc`;
                                     if (translations[nameKey]) nameLocalizations[lang] = translations[nameKey];
                                     if (translations[descKey]) descriptionLocalizations[lang] = translations[descKey];
                                 }
                             }
                             if (Object.keys(nameLocalizations).length > 0) {
-                                commandBuilder.setNameLocalizations(nameLocalizations);
+                                builder.setNameLocalizations(nameLocalizations);
                             }
                             if (Object.keys(descriptionLocalizations).length > 0) {
-                                commandBuilder.setDescriptionLocalizations(descriptionLocalizations);
+                                builder.setDescriptionLocalizations(descriptionLocalizations);
                             }
-
-                            this._applySubcommandLocalizations(commandBuilder, commandName, allLocales);
+                            this._applySubcommandLocalizations(builder, name, allLocales);
                         } catch (e) {
-                            this.logger.warn(`Failed to load localizations for command "${commandName}": ${e.message}`);
+                            this.logger.warn(`Failed to load localizations for command "${name}": ${e.message}`);
                         }
-
-                        this.commandCategoryMap.set(commandName, item.name);
-                        if (commandNamesSet.has(commandName)) {
-                            this.logger.warn(`Duplicate slash command name detected: "${commandName}" in ${filePath}`);
+                        this.commandCategoryMap.set(name, item.name);
+                        if (commandNamesSet.has(name)) {
+                            this.logger.warn(`Duplicate slash command name detected: "${name}" in ${filePath}`);
                         } else {
-                            commandNamesSet.add(commandName);
-                            this.client.commands.set(commandName, commandModule);
-                            commandDataForDeployment.push(commandBuilder.toJSON());
-                            summary = { type: 'single', name: commandName, folder: item.name, kind: 'slash' };
-                            if (summary) loadedCommandsSummary.push(summary);
+                            commandNamesSet.add(name);
+                            this.client.commands.set(name, commandModule);
+                            commandDataForDeployment.push(builder.toJSON());
+                            summarySlash = { type: 'single', name: name, folder: item.name, kind: 'slash' };
+                            if (summarySlash) loadedCommandsSummary.push(summarySlash);
                         }
                     }
 
                     if (commandModule.contextMenuCommand) {
-                        const commandName = commandModule.contextMenuCommand.name;
-                        if (!this.client.commands.has(commandName)) {
-                            this.client.commands.set(commandName, commandModule);
+                        const builder = commandModule.contextMenuCommand;
+                        const name = builder.name;
+                        if (!this.client.commands.has(name)) {
+                            this.client.commands.set(name, commandModule);
                         }
-                        commandDataForDeployment.push(commandModule.contextMenuCommand.toJSON());
-                        summary = { type: 'single', name: commandName, folder: item.name, kind: 'contextMenu' };
-                        if (summary) loadedCommandsSummary.push(summary);
+                        commandDataForDeployment.push(builder.toJSON());
+                        summaryContext = { type: 'single', name: name, folder: item.name, kind: 'contextMenu' };
+                        if (summaryContext) loadedCommandsSummary.push(summaryContext);
                     }
 
-                    if (!commandModule.slashCommand && !commandModule.contextMenuCommand) {
-                        summary = this.registerCommand(
+                    if (!isClass && !commandModule.slashCommand && !commandModule.contextMenuCommand) {
+                        const summary = this.registerCommand(
                             commandModule,
                             filePath,
                             commandNamesSet,
@@ -655,7 +761,6 @@ class AddonManager {
                 }
             }
         }
-
         return loadedCommandsSummary;
     }
 
@@ -822,7 +927,7 @@ class AddonManager {
                 }
             }
             if (addon.events && addon.events.length) {
-                this.logger.info('  🔔 Event(s)');
+                this.logger.info('  📢 Event(s)');
                 for (const ev of addon.events) {
                     this.logger.info(`     └─ ${ev}`);
                 }

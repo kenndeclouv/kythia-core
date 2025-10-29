@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.2-beta
+ * @version 0.9.3-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -221,7 +221,16 @@ class InteractionManager {
             setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
         }
 
-        await command.execute(interaction, this.container);
+        if (typeof command.execute === 'function') {
+            if (command.execute.length === 2) {
+                await command.execute(interaction, this.container);
+            } else {
+                await command.execute(interaction);
+            }
+        } else {
+            this.logger.error("Command doesn't have a valid 'execute' function:", command.name || commandKey);
+            return interaction.reply({ content: await this.t(interaction, 'common.error.command.execution.invalid'), ephemeral: true });
+        }
     }
 
     /**

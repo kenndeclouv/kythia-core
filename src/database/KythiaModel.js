@@ -4,7 +4,7 @@
  * @file src/database/KythiaModel.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.2-beta
+ * @version 0.9.3-beta
  *
  * @description
  * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
@@ -20,7 +20,7 @@
 
 const jsonStringify = require('json-stable-stringify');
 const { Model } = require('sequelize');
-const { LRUCache } = require('lru-cache');
+const LRUCache = require('lru-cache');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
