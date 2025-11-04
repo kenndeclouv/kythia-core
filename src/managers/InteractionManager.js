@@ -222,6 +222,14 @@ class InteractionManager {
         }
 
         if (typeof command.execute === 'function') {
+            // Ensure logger is defined for the command execution context
+            if (!interaction.logger) {
+                interaction.logger = this.logger;
+            }
+            // Also inject logger into the container for legacy/compatibility
+            if (this.container && !this.container.logger) {
+                this.container.logger = this.logger;
+            }
             if (command.execute.length === 2) {
                 await command.execute(interaction, this.container);
             } else {
@@ -398,6 +406,13 @@ class InteractionManager {
             }
         }
 
+        // Ensure logger is available in the execution context
+        if (!interaction.logger) {
+            interaction.logger = this.logger;
+        }
+        if (this.container && !this.container.logger) {
+            this.container.logger = this.logger;
+        }
         await command.execute(interaction, this.container);
     }
 

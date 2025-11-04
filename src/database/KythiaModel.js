@@ -20,7 +20,7 @@
 
 const jsonStringify = require('json-stable-stringify');
 const { Model } = require('sequelize');
-const LRUCache = require('lru-cache');
+const { LRUCache } = require('lru-cache');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
