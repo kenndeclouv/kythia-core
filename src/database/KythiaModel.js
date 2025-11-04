@@ -16,6 +16,7 @@
  * -  Shard Mode: If using Redis sharding, disables Map fallback for strict consistency.
  * -  Hybrid Fallback: For non-shard setups, automatic fallback is preserved.
  * -  Fast, consistent, safe cache busting.
+ * -  Multi-Redis Fallback: Support multiple Redis URLs for failover/fallback. Will try connect to next Redis if one fails.
  */
 
 const jsonStringify = require('json-stable-stringify');
@@ -68,7 +69,11 @@ class KythiaModel extends Model {
 
     static redisErrorTimestamps = [];
 
-    static isShardMode = false; // when true, local fallback is disabled
+    static isShardMode = false;
+
+    static _redisFallbackURLs = [];
+    static _redisCurrentIndex = 0;
+    static _redisFailedIndexes = new Set();
 
     /**
      * 💉 Injects core dependencies into the KythiaModel class.
@@ -77,7 +82,8 @@ class KythiaModel extends Model {
      * @param {Object} dependencies.logger - The logger instance
      * @param {Object} dependencies.config - The application config object
      * @param {Object} [dependencies.redis] - Optional Redis client instance
-     * @param {Object} [dependencies.redisOptions] - Redis connection options if not providing a client
+     * @param {Object|Array|string} [dependencies.redisOptions] - Redis connection options if not providing a client.
+     *     Can now be string (URL), object (ioredis options), or array of URLs/options for fallback.
      */
     static setDependencies({ logger, config, redis, redisOptions }) {
         if (!logger || !config) {
@@ -88,18 +94,30 @@ class KythiaModel extends Model {
         this.config = config;
         this.CACHE_VERSION = config.db?.redisCacheVersion || '1.0.0';
 
-        // Check for sharding
         this.isShardMode = !!config?.db?.redis?.shard || false;
-
         if (this.isShardMode) {
             this.logger.info('🟣 [REDIS][SHARD] Detected redis sharding mode (shard: true). Local fallback cache DISABLED!');
         }
 
+        if (Array.isArray(redisOptions)) {
+            this._redisFallbackURLs = redisOptions.slice();
+        } else if (typeof redisOptions === 'string') {
+            this._redisFallbackURLs = redisOptions.split(',').map((url) => url.trim());
+        } else if (redisOptions && typeof redisOptions === 'object' && Array.isArray(redisOptions.urls)) {
+            this._redisFallbackURLs = redisOptions.urls.slice();
+        } else if (redisOptions) {
+            this._redisFallbackURLs = [redisOptions];
+        } else {
+            this._redisFallbackURLs = [];
+        }
+
+        this._redisCurrentIndex = 0;
+
         if (redis) {
             this.redis = redis;
             this.isRedisConnected = redis.status === 'ready';
-        } else if (redisOptions) {
-            this.initializeRedis(redisOptions);
+        } else if (this._redisFallbackURLs.length > 0) {
+            this.initializeRedis();
         } else {
             if (this.isShardMode) {
                 this.logger.error('❌ [REDIS][SHARD] No Redis client/options, but shard:true. Application will work WITHOUT caching!');
@@ -114,7 +132,8 @@ class KythiaModel extends Model {
     /**
      * Helper: Track redis error timestamp, and check if error count in interval exceeds tolerance.
      * Jika error yang terjadi >= REDIS_ERROR_TOLERANCE_COUNT dalam  REDIS_ERROR_TOLERANCE_INTERVAL_MS,
-     * barulah fallback ke In-Memory (isRedisConnected = false) -- KECUALI jika shard: true.
+     * barulah coba connect ke redis berikutnya (multi redis), jika tidak ada, baru fallback ke In-Memory (isRedisConnected = false)
+     * -- KECUALI jika shard: true.
      */
     static _trackRedisError(err) {
         const now = Date.now();
@@ -124,21 +143,22 @@ class KythiaModel extends Model {
 
         if (this.redisErrorTimestamps.length >= REDIS_ERROR_TOLERANCE_COUNT) {
             if (this.isRedisConnected) {
-                // In shard mode, fallback is not allowed!
-                if (this.isShardMode) {
+                const triedFallback = this._tryRedisFailover();
+                if (triedFallback) {
+                    this.logger.warn(`[REDIS] Error tolerance reached, switching to NEXT Redis failover...`);
+                } else if (this.isShardMode) {
                     this.logger.error(
                         `❌ [REDIS][SHARD] ${this.redisErrorTimestamps.length} consecutive errors in ${
                             REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
                         }s. SHARD MODE: Disabling cache (NO fallback), all queries go to DB. (Last error: ${err?.message})`
                     );
                     this.isRedisConnected = false;
-                    // Do not schedule reconnect if redis is not supposed to fallback. Reconnect logic is fine.
                     this._scheduleReconnect();
                 } else {
                     this.logger.error(
                         `❌ [REDIS] ${this.redisErrorTimestamps.length} consecutive errors in ${
                             REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
-                        }s. Fallback to In-Memory Cache! (Last error: ${err?.message})`
+                        }s. All Redis exhausted, fallback to In-Memory Cache! (Last error: ${err?.message})`
                     );
                     this.isRedisConnected = false;
                     this._scheduleReconnect();
@@ -154,66 +174,139 @@ class KythiaModel extends Model {
     }
 
     /**
+     * Coba switch ke redis URL berikutnya jika ada. Return true jika switching, false jika tidak ada lagi.
+     * PRIVATE.
+     */
+    static _tryRedisFailover() {
+        if (!Array.isArray(this._redisFallbackURLs) || this._redisFallbackURLs.length < 2) {
+            return false;
+        }
+        const prevIndex = this._redisCurrentIndex;
+        if (this._redisCurrentIndex + 1 < this._redisFallbackURLs.length) {
+            this._redisCurrentIndex++;
+            this.logger.warn(
+                `[REDIS][FAILOVER] Trying to switch Redis connection from url index ${prevIndex} to ${this._redisCurrentIndex}`
+            );
+            this._closeCurrentRedis();
+            this.initializeRedis();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Close the current Redis (if exists).
+     * PRIVATE.
+     */
+    static _closeCurrentRedis() {
+        if (this.redis && typeof this.redis.quit === 'function') {
+            try {
+                this.redis.quit();
+            } catch (e) {}
+        }
+        this.redis = undefined;
+        this.isRedisConnected = false;
+    }
+
+    /**
      * 🔌 Initializes the Redis connection if not already initialized.
-     * @param {string|Object} redisOptions - Redis connection string or options object
-     * @returns {Object} The Redis client instance
+     * (Versi ini MENGHAPUS lazyConnect dan _attemptConnection untuk fix race condition)
      */
     static initializeRedis(redisOptions) {
-        if (this.redis) return this.redis;
-
-        const Redis = require('ioredis');
-        this.lastRedisOpts = redisOptions;
-
-        // Check sharding now if not set yet (for runtime .initializeRedis case)
-        if (redisOptions && typeof redisOptions === 'object' && redisOptions.shard) {
-            this.isShardMode = true;
+        if (redisOptions) {
+            // ... (Logic ini biarin aja, udah bener) ...
+            if (Array.isArray(redisOptions)) {
+                this._redisFallbackURLs = redisOptions.slice();
+                this._redisCurrentIndex = 0;
+            } else if (redisOptions && typeof redisOptions === 'object' && Array.isArray(redisOptions.urls)) {
+                this._redisFallbackURLs = redisOptions.urls.slice();
+                this._redisCurrentIndex = 0;
+            } else {
+                this._redisFallbackURLs = [redisOptions];
+                this._redisCurrentIndex = 0;
+            }
         }
 
-        if (!redisOptions || (typeof redisOptions === 'string' && redisOptions.trim() === '')) {
+        if (!Array.isArray(this._redisFallbackURLs) || this._redisFallbackURLs.length === 0) {
+            // ... (Logic error ini biarin aja, udah bener) ...
             if (this.isShardMode) {
                 this.logger.error('❌ [REDIS][SHARD] No Redis URL/options provided but shard:true. Will run without caching!');
                 this.isRedisConnected = false;
             } else {
-                this.logger.warn('🟠 [REDIS] No Redis URL provided. Operating in In-Memory Cache mode only.');
+                this.logger.warn('🟠 [REDIS] No Redis client or options provided. Operating in In-Memory Cache mode only.');
                 this.isRedisConnected = false;
             }
             return null;
         }
 
-        const retryStrategy = (times) => {
+        const Redis = require('ioredis');
+        this.lastRedisOpts = Array.isArray(this._redisFallbackURLs) ? this._redisFallbackURLs.slice() : [this._redisFallbackURLs];
+
+        if (this.redis) return this.redis;
+
+        const opt = this._redisFallbackURLs[this._redisCurrentIndex];
+
+        if (opt && typeof opt === 'object' && opt.shard) {
+            this.isShardMode = true;
+        }
+
+        let redisOpt;
+        if (typeof opt === 'string') {
+            // --- 👇 PERUBAHAN DI SINI 👇 ---
+            // HAPUS lazyConnect: true
+            redisOpt = { url: opt, retryStrategy: this._makeRetryStrategy() };
+        } else if (opt && typeof opt === 'object') {
+            // --- 👇 PERUBAHAN DI SINI 👇 ---
+            // HAPUS lazyConnect: true
+            redisOpt = {
+                maxRetriesPerRequest: 2,
+                enableReadyCheck: true,
+                retryStrategy: this._makeRetryStrategy(),
+                ...opt,
+            };
+        } else {
+            this.logger.error('❌ [REDIS] Invalid redis config detected in list');
+            this.isRedisConnected = false;
+            return null;
+        }
+
+        this.logger.info(
+            `[REDIS][INIT] Connecting to Redis fallback #${this._redisCurrentIndex + 1}/${this._redisFallbackURLs.length}: ${
+                typeof opt === 'string' ? opt : redisOpt.url || '(object)'
+            }`
+        );
+
+        // --- 👇 PERUBAHAN DI SINI 👇 ---
+        // Biarin ioredis otomatis konek (nggak pake lazy)
+        this.redis = new Redis(redisOpt.url || redisOpt);
+        
+        // Langsung pasang handler
+        this._setupRedisEventHandlers();
+
+        // HAPUS PANGGILAN ke _attemptConnection()
+        
+        return this.redis;
+    }
+
+    // HAPUS Fungsi _attemptConnection
+    // (Sudah tidak ada atau di bawah ini harus DIHAPUS sepenuhnya)
+
+    /**
+     * Internal: Makes retry strategy function which wraps the fallback failover logic if all failed.
+     * Used by initializeRedis.
+     */
+    static _makeRetryStrategy() {
+        return (times) => {
             if (times > 5) {
-                if (this.isShardMode) {
-                    this.logger.error(`❌ [REDIS][SHARD] Could not connect after ${times - 1} retries. Disabling cache (no fallback)!`);
-                } else {
-                    this.logger.error(`❌ [REDIS] Could not connect after ${times - 1} retries. Falling back to In-Memory Cache.`);
-                }
+                this.logger.error(`❌ [REDIS] Could not connect after ${times - 1} retries for Redis #${this._redisCurrentIndex + 1}.`);
                 return null;
             }
             const delay = Math.min(times * 500, 2000);
-            this.logger.warn(`🟠 [REDIS] Connection failed. Retrying in ${delay}ms (Attempt ${times})...`);
+            this.logger.warn(
+                `🟠 [REDIS] Connection failed for Redis #${this._redisCurrentIndex + 1}. Retrying in ${delay}ms (Attempt ${times})...`
+            );
             return delay;
         };
-
-        const finalOptions =
-            typeof redisOptions === 'string'
-                ? { url: redisOptions, retryStrategy, lazyConnect: true }
-                : { maxRetriesPerRequest: 2, enableReadyCheck: true, retryStrategy, lazyConnect: true, ...redisOptions };
-
-        this.redis = new Redis(
-            typeof redisOptions === 'string' ? redisOptions : finalOptions,
-            typeof redisOptions === 'string' ? finalOptions : undefined
-        );
-
-        this.redis.connect().catch((err) => {
-            if (this.isShardMode) {
-                this.logger.error('❌ [REDIS][SHARD] Initial connection failed: ' + err.message);
-            } else {
-                this.logger.error('❌ [REDIS] Initial connection failed:', err.message);
-            }
-        });
-
-        this._setupRedisEventHandlers();
-        return this.redis;
     }
 
     /**
@@ -226,22 +319,19 @@ class KythiaModel extends Model {
                 this.logger.info('✅ [REDIS] Connection established. Switching to Redis Cache mode.');
             }
             this.isRedisConnected = true;
-
             this.redisErrorTimestamps = [];
-
             if (this.reconnectTimeout) {
                 clearTimeout(this.reconnectTimeout);
                 this.reconnectTimeout = null;
             }
+            this._redisFailedIndexes.delete(this._redisCurrentIndex); // <-- TAMBAHIN INI
         });
 
         this.redis.on('error', (err) => {
+            // (Biarkan handler 'error' ini kosong atau cuma nge-log, 
+            // karena 'close' yang akan nanganin failover)
             if (err && (err.code === 'ECONNREFUSED' || err.message)) {
-                if (this.isShardMode) {
-                    this.logger.warn(`🟠 [REDIS][SHARD] Error: ${err.message}`);
-                } else {
-                    this.logger.warn(`🟠 [REDIS] Error: ${err.message}`);
-                }
+                 this.logger.warn(`🟠 [REDIS] Connection error: ${err.message}`);
             }
         });
 
@@ -250,11 +340,22 @@ class KythiaModel extends Model {
                 if (this.isShardMode) {
                     this.logger.error('❌ [REDIS][SHARD] Connection closed. Cache DISABLED (no fallback).');
                 } else {
-                    this.logger.error('❌ [REDIS] Connection closed. Falling back to In-Memory Cache mode.');
+                    this.logger.error('❌ [REDIS] Connection closed. Fallback/failover will be attempted.');
                 }
             }
             this.isRedisConnected = false;
-            this._scheduleReconnect();
+
+            this._redisFailedIndexes.add(this._redisCurrentIndex); // <-- TAMBAHIN INI
+
+            // --- INI LOGIKA KUNCINYA ---
+            this.logger.warn(`[REDIS] Connection #${this._redisCurrentIndex + 1} closed. Attempting immediate failover...`);
+            const triedFailover = this._tryRedisFailover();
+
+            if (!triedFailover) {
+                this.logger.warn(`[REDIS] Failover exhausted. Scheduling full reconnect...`);
+                this._scheduleReconnect();
+            }
+            // --- AKHIR LOGIKA KUNCI ---
         });
     }
 
@@ -277,7 +378,11 @@ class KythiaModel extends Model {
 
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
-            this.initializeRedis(this.lastRedisOpts);
+
+            this._redisCurrentIndex = 0;
+            this._redisFailedIndexes.clear(); // <-- TAMBAHIN INI
+            this._closeCurrentRedis();
+            this.initializeRedis();
         }, RECONNECT_DELAY_MINUTES * 60 * 1000);
     }
 
@@ -329,9 +434,8 @@ class KythiaModel extends Model {
         if (this.isRedisConnected) {
             await this._redisSetCacheEntry(cacheKey, data, finalTtl, tags);
         } else if (!this.isShardMode) {
-            // NON-shard only
             this._mapSetCacheEntry(cacheKey, data, finalTtl);
-        } // else: shard mode, Redis is down, DO NOT cache
+        }
     }
 
     /**
@@ -345,10 +449,9 @@ class KythiaModel extends Model {
         if (this.isRedisConnected) {
             return this._redisGetCachedEntry(cacheKey, includeOptions);
         } else if (!this.isShardMode) {
-            // fallback only if not sharding
             return this._mapGetCachedEntry(cacheKey, includeOptions);
         }
-        // SHARD MODE: no local fallback
+
         return { hit: false, data: undefined };
     }
 
@@ -494,7 +597,7 @@ class KythiaModel extends Model {
      * DISABLED in shard mode.
      */
     static _mapGetCachedEntry(cacheKey, includeOptions) {
-        if (this.isShardMode) return { hit: false, data: undefined }; // DISABLED in shard mode
+        if (this.isShardMode) return { hit: false, data: undefined };
 
         if (this.localNegativeCache.has(cacheKey)) {
             this.cacheStats.mapHits++;
@@ -544,7 +647,7 @@ class KythiaModel extends Model {
      * DISABLED in shard mode.
      */
     static _mapClearCache(cacheKey) {
-        if (this.isShardMode) return; // DISABLED in shard mode
+        if (this.isShardMode) return;
         this.localCache.delete(cacheKey);
         this.localNegativeCache.delete(cacheKey);
         this.cacheStats.clears++;
@@ -556,7 +659,7 @@ class KythiaModel extends Model {
      * DISABLED in shard mode.
      */
     static _mapClearAllModelCache() {
-        if (this.isShardMode) return; // DISABLED in shard mode
+        if (this.isShardMode) return;
         const prefix = `${this.CACHE_VERSION}:${this.name}:`;
         let cleared = 0;
 
@@ -639,7 +742,6 @@ class KythiaModel extends Model {
 
         const queryPromise = this.findOne(normalizedOptions)
             .then((record) => {
-                // Only cache if allowed (no cache in shard/failover unless redis is up)
                 if (this.isRedisConnected || !this.isShardMode) {
                     const tags = [`${this.name}`];
                     if (record) {
@@ -683,7 +785,6 @@ class KythiaModel extends Model {
 
         const queryPromise = this.findAll(normalizedOptions)
             .then((records) => {
-                // Only cache if allowed
                 if (this.isRedisConnected || !this.isShardMode) {
                     const tags = [`${this.name}`];
 
@@ -723,7 +824,6 @@ class KythiaModel extends Model {
         }
         const findOrCreatePromise = this.findOrCreate(findOrCreateOptions)
             .then(([instance, created]) => {
-                // Only cache if allowed
                 if (this.isRedisConnected || !this.isShardMode) {
                     const tags = [`${this.name}`];
                     if (instance) {
@@ -757,7 +857,6 @@ class KythiaModel extends Model {
         this.cacheStats.misses++;
         const count = await this.count(countOptions);
 
-        // Only cache if allowed
         if (this.isRedisConnected || !this.isShardMode) {
             const tags = [`${this.name}`];
             this.setCacheEntry(cacheKey, count, ttl, tags);
@@ -807,7 +906,6 @@ class KythiaModel extends Model {
 
         const result = await this.findAll(queryOptions);
 
-        // Only cache if allowed
         if (this.isRedisConnected || !this.isShardMode) {
             const tags = [`${this.name}`];
             if (Array.isArray(cacheTags)) tags.push(...cacheTags);
