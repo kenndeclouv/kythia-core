@@ -4,7 +4,7 @@
  * @file src/managers/ShutdownManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.3-beta
+ * @version 0.9.4-beta
  *
  * @description
  * Handles graceful shutdown procedures including interval tracking,
