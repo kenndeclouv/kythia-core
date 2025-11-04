@@ -74,6 +74,7 @@ class KythiaModel extends Model {
     static _redisFallbackURLs = [];
     static _redisCurrentIndex = 0;
     static _redisFailedIndexes = new Set();
+    static _justFailedOver = false;
 
     /**
      * 💉 Injects core dependencies into the KythiaModel class.
@@ -187,6 +188,9 @@ class KythiaModel extends Model {
             this.logger.warn(
                 `[REDIS][FAILOVER] Trying to switch Redis connection from url index ${prevIndex} to ${this._redisCurrentIndex}`
             );
+
+            this._justFailedOver = true;
+
             this._closeCurrentRedis();
             this.initializeRedis();
             return true;
@@ -214,7 +218,6 @@ class KythiaModel extends Model {
      */
     static initializeRedis(redisOptions) {
         if (redisOptions) {
-            // ... (Logic ini biarin aja, udah bener) ...
             if (Array.isArray(redisOptions)) {
                 this._redisFallbackURLs = redisOptions.slice();
                 this._redisCurrentIndex = 0;
@@ -228,7 +231,6 @@ class KythiaModel extends Model {
         }
 
         if (!Array.isArray(this._redisFallbackURLs) || this._redisFallbackURLs.length === 0) {
-            // ... (Logic error ini biarin aja, udah bener) ...
             if (this.isShardMode) {
                 this.logger.error('❌ [REDIS][SHARD] No Redis URL/options provided but shard:true. Will run without caching!');
                 this.isRedisConnected = false;
@@ -252,12 +254,8 @@ class KythiaModel extends Model {
 
         let redisOpt;
         if (typeof opt === 'string') {
-            // --- 👇 PERUBAHAN DI SINI 👇 ---
-            // HAPUS lazyConnect: true
             redisOpt = { url: opt, retryStrategy: this._makeRetryStrategy() };
         } else if (opt && typeof opt === 'object') {
-            // --- 👇 PERUBAHAN DI SINI 👇 ---
-            // HAPUS lazyConnect: true
             redisOpt = {
                 maxRetriesPerRequest: 2,
                 enableReadyCheck: true,
@@ -276,20 +274,12 @@ class KythiaModel extends Model {
             }`
         );
 
-        // --- 👇 PERUBAHAN DI SINI 👇 ---
-        // Biarin ioredis otomatis konek (nggak pake lazy)
         this.redis = new Redis(redisOpt.url || redisOpt);
-        
-        // Langsung pasang handler
+
         this._setupRedisEventHandlers();
 
-        // HAPUS PANGGILAN ke _attemptConnection()
-        
         return this.redis;
     }
-
-    // HAPUS Fungsi _attemptConnection
-    // (Sudah tidak ada atau di bawah ini harus DIHAPUS sepenuhnya)
 
     /**
      * Internal: Makes retry strategy function which wraps the fallback failover logic if all failed.
@@ -314,7 +304,7 @@ class KythiaModel extends Model {
      * @private
      */
     static _setupRedisEventHandlers() {
-        this.redis.on('connect', () => {
+        this.redis.on('connect', async () => {
             if (!this.isRedisConnected) {
                 this.logger.info('✅ [REDIS] Connection established. Switching to Redis Cache mode.');
             }
@@ -324,14 +314,23 @@ class KythiaModel extends Model {
                 clearTimeout(this.reconnectTimeout);
                 this.reconnectTimeout = null;
             }
-            this._redisFailedIndexes.delete(this._redisCurrentIndex); // <-- TAMBAHIN INI
+            this._redisFailedIndexes.delete(this._redisCurrentIndex);
+
+            if (this._justFailedOver) {
+                this.logger.warn(`[REDIS][FAILOVER] Connected to new server, flushing potentially stale cache...`);
+                try {
+                    await this.redis.flushdb();
+                    this.logger.info(`[REDIS][FAILOVER] Stale cache flushed successfully.`);
+                } catch (err) {
+                    this.logger.error(`[REDIS][FAILOVER] FAILED TO FLUSH CACHE:`, err);
+                }
+                this._justFailedOver = false;
+            }
         });
 
         this.redis.on('error', (err) => {
-            // (Biarkan handler 'error' ini kosong atau cuma nge-log, 
-            // karena 'close' yang akan nanganin failover)
             if (err && (err.code === 'ECONNREFUSED' || err.message)) {
-                 this.logger.warn(`🟠 [REDIS] Connection error: ${err.message}`);
+                this.logger.warn(`🟠 [REDIS] Connection error: ${err.message}`);
             }
         });
 
@@ -345,9 +344,8 @@ class KythiaModel extends Model {
             }
             this.isRedisConnected = false;
 
-            this._redisFailedIndexes.add(this._redisCurrentIndex); // <-- TAMBAHIN INI
+            this._redisFailedIndexes.add(this._redisCurrentIndex);
 
-            // --- INI LOGIKA KUNCINYA ---
             this.logger.warn(`[REDIS] Connection #${this._redisCurrentIndex + 1} closed. Attempting immediate failover...`);
             const triedFailover = this._tryRedisFailover();
 
@@ -355,7 +353,6 @@ class KythiaModel extends Model {
                 this.logger.warn(`[REDIS] Failover exhausted. Scheduling full reconnect...`);
                 this._scheduleReconnect();
             }
-            // --- AKHIR LOGIKA KUNCI ---
         });
     }
 
@@ -380,7 +377,7 @@ class KythiaModel extends Model {
             this.reconnectTimeout = null;
 
             this._redisCurrentIndex = 0;
-            this._redisFailedIndexes.clear(); // <-- TAMBAHIN INI
+            this._redisFailedIndexes.clear();
             this._closeCurrentRedis();
             this.initializeRedis();
         }, RECONNECT_DELAY_MINUTES * 60 * 1000);
