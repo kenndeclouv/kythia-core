@@ -448,10 +448,17 @@ async function KythiaORM({ kythiaInstance, sequelize, KythiaModel, logger, confi
                 }
             }
 
-            for (const { model, newHash } of modelsToSync) {
-                logger.info(`🔄 Syncing model: ${model.name}...`);
-                await model.sync({ alter: true });
+            const modelNamesToSync = modelsToSync.map(m => m.model.name);
 
+            logger.info(`🔄 Syncing models via sequelize.sync(): ${modelNamesToSync.join(', ')}...`);
+            await sequelize.sync({
+                models: modelNamesToSync,
+                alter: true,
+            });
+            logger.info('✅ Model sync complete.');
+
+            logger.info('💾 Updating version hashes in model_versions table...');
+            for (const { model, newHash } of modelsToSync) {
                 await sequelize.query(
                     `INSERT INTO ${versionTableName} (model_name, version_hash, updated_at) 
                         VALUES (?, ?, CURRENT_TIMESTAMP) 
@@ -462,8 +469,6 @@ async function KythiaORM({ kythiaInstance, sequelize, KythiaModel, logger, confi
                         type: sequelize.QueryTypes.INSERT,
                     }
                 );
-
-                logger.info(`✅ Synced model: ${model.name} (${newHash})`);
             }
 
             logger.info('✨ Database sync completed successfully!');
