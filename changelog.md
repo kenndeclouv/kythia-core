@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.9.4-beta.1](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.0...v0.9.4-beta.1) (2025-11-09)
+
+
+### ✨ Added
+
+* Refactor KythiaORM to sync multiple models in a single operation, improving efficiency and logging. Updated version hashes in model_versions table after sync completion. ([1bc195d](https://github.com/kenndeclouv/kythia-core/commit/1bc195d17d67865d01cb6c0290a2715f876b2451))
+
 ### 0.9.4-beta.0 (2025-11-04)
 
 
