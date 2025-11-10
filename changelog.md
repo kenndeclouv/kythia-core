@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.9.4-beta.2](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.1...v0.9.4-beta.2) (2025-11-10)
+
+
+### ✨ Added
+
+* Enhance configuration validation in Kythia by adding checks for required bot and database settings, defaulting to SQLite if no driver is specified, and improving error logging for missing configurations. ([72148fa](https://github.com/kenndeclouv/kythia-core/commit/72148fa6b29a97da026746eb44fa4b8696744cb5))
+
 ### [0.9.4-beta.1](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.0...v0.9.4-beta.1) (2025-11-09)
 
 
