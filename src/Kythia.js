@@ -97,29 +97,61 @@ class Kythia {
      * Throws an error if any required config is missing.
      */
     _checkRequiredConfig() {
-        const requiredConfig = [
+        const requiredBotConfig = [
             ['bot', 'token'],
             ['bot', 'clientId'],
             ['bot', 'clientSecret'],
-            ['db', 'driver'],
-            ['db', 'host'],
-            ['db', 'port'],
-            ['db', 'name'],
-            ['db', 'user'],
         ];
-
-        const missingConfigs = [];
-
-        for (const pathArr of requiredConfig) {
+        const missingBotConfigs = [];
+        for (const pathArr of requiredBotConfig) {
             let value = this.kythiaConfig;
             for (const key of pathArr) {
                 value = value?.[key];
             }
-
             if (value === undefined || value === null || value === '') {
-                missingConfigs.push(pathArr.join('.'));
+                missingBotConfigs.push(pathArr.join('.'));
             }
         }
+
+        if (!this.kythiaConfig.db) this.kythiaConfig.db = {};
+
+        let driver = this.kythiaConfig.db.driver;
+        if (!driver || driver === '') {
+            this.kythiaConfig.db.driver = 'sqlite';
+            driver = 'sqlite';
+            this.logger.info('💡 DB driver not specified. Defaulting to: sqlite');
+        } else {
+            driver = driver.toLowerCase();
+            this.kythiaConfig.db.driver = driver;
+        }
+
+        if (driver === 'sqlite') {
+            if (!this.kythiaConfig.db.name || this.kythiaConfig.db.name === '') {
+                this.kythiaConfig.db.name = 'kythiadata.sqlite';
+            }
+        }
+
+        const requiredDbConfig = [
+            ['db', 'driver'],
+            ['db', 'name'],
+        ];
+
+        if (driver !== 'sqlite') {
+            requiredDbConfig.push(['db', 'host'], ['db', 'port'], ['db', 'user'], ['db', 'pass']);
+        }
+
+        const missingDbConfigs = [];
+        for (const pathArr of requiredDbConfig) {
+            let value = this.kythiaConfig;
+            for (const key of pathArr) {
+                value = value?.[key];
+            }
+            if (value === undefined || value === null || value === '') {
+                missingDbConfigs.push(pathArr.join('.'));
+            }
+        }
+
+        const missingConfigs = missingBotConfigs.concat(missingDbConfigs);
 
         if (missingConfigs.length > 0) {
             this.logger.error('❌ Required configurations are not set:');
