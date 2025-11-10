@@ -4,7 +4,7 @@
  * @file src/Kythia.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.4-beta
+ * @version 0.9.4-beta.3
  *
  * @description
  * This file contains the main Bot class - acting as an orchestrator (CEO) that
