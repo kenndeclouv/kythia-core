@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.9.4-beta.3](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.2...v0.9.4-beta.3) (2025-11-10)
+
+
+### 🔧 Changed
+
+* Enhance KythiaORM with dialect-specific UPSERT queries for improved database compatibility. Adjusted InteractionManager button handler logic for better flexibility in handling interactions. ([2bfafc4](https://github.com/kenndeclouv/kythia-core/commit/2bfafc47e83b06f5f72a57da162d0c6b244bfe6d))
+
 ### [0.9.4-beta.2](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.1...v0.9.4-beta.2) (2025-11-10)
 
 
