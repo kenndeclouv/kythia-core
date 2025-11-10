@@ -7,7 +7,7 @@
  * @version 0.9.4-beta
  *
  * @description
- * Main Sequelize connection factory for the application
+ * Main Sequelize connection factory for the application.
  */
 const { Sequelize } = require('sequelize');
 
@@ -21,14 +21,35 @@ const { Sequelize } = require('sequelize');
  */
 function createSequelizeInstance(config, logger) {
     const dbConfig = config.db || {};
+    if (!config.db) config.db = dbConfig;
 
-    const dialect = dbConfig.driver || process.env.DB_DRIVER;
-    const dbName = dbConfig.name || process.env.DB_NAME;
+    let driver = dbConfig.driver || process.env.DB_DRIVER;
+    let name = dbConfig.name || process.env.DB_NAME;
+
+    if (!driver || driver === '') {
+        driver = 'sqlite';
+        if (logger) logger.info('💡 DB driver not specified. Defaulting to: sqlite');
+    } else {
+        driver = driver.toLowerCase();
+    }
+
+    if (driver === 'sqlite') {
+        if (!name || name === '') {
+            name = 'kythiadata.sqlite';
+            if (logger) logger.info('💡 DB name for sqlite not specified. Defaulting to: kythiadata.sqlite');
+        }
+    }
+
+    dbConfig.driver = driver;
+    dbConfig.name = name;
+
+    const dialect = dbConfig.driver;
+    const dbName = dbConfig.name;
     const dbUser = dbConfig.user || process.env.DB_USER;
     const dbPassword = dbConfig.password || process.env.DB_PASSWORD;
     const dbHost = dbConfig.host || process.env.DB_HOST;
     const dbPort = dbConfig.port || process.env.DB_PORT;
-    const dbStorage = dbConfig.storagePath || process.env.DB_STORAGE_PATH;
+
     const dbSocket = dbConfig.socketPath || process.env.DB_SOCKET_PATH;
     const dbSsl = dbConfig.ssl || process.env.DB_SSL;
     const dbDialectOptions = dbConfig.dialectOptions || process.env.DB_DIALECT_OPTIONS;
@@ -45,12 +66,16 @@ function createSequelizeInstance(config, logger) {
             charset: 'utf8mb4',
             collate: 'utf8mb4_unicode_ci',
         },
-        timezone: dbConfig.timezone || '+00:00',
     };
+
+    if (dialect !== 'sqlite') {
+        seqConfig.timezone = dbConfig.timezone || '+00:00';
+    }
 
     switch (dialect) {
         case 'sqlite':
-            seqConfig.storage = dbStorage;
+            seqConfig.storage = dbConfig.name;
+            delete seqConfig.database;
             break;
 
         case 'mysql':

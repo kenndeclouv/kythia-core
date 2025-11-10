@@ -448,7 +448,7 @@ async function KythiaORM({ kythiaInstance, sequelize, KythiaModel, logger, confi
                 }
             }
 
-            const modelNamesToSync = modelsToSync.map(m => m.model.name);
+            const modelNamesToSync = modelsToSync.map((m) => m.model.name);
 
             logger.info(`🔄 Syncing models via sequelize.sync(): ${modelNamesToSync.join(', ')}...`);
             await sequelize.sync({
@@ -459,16 +459,50 @@ async function KythiaORM({ kythiaInstance, sequelize, KythiaModel, logger, confi
 
             logger.info('💾 Updating version hashes in model_versions table...');
             for (const { model, newHash } of modelsToSync) {
-                await sequelize.query(
-                    `INSERT INTO ${versionTableName} (model_name, version_hash, updated_at) 
-                        VALUES (?, ?, CURRENT_TIMESTAMP) 
-                        ON DUPLICATE KEY UPDATE 
-                        version_hash = VALUES(version_hash), updated_at = CURRENT_TIMESTAMP`,
-                    {
-                        replacements: [model.name, newHash],
-                        type: sequelize.QueryTypes.INSERT,
-                    }
-                );
+                const dialect = sequelize.getDialect();
+                let upsertQuery;
+
+                switch (dialect) {
+                    case 'mysql':
+                    case 'mariadb':
+                        upsertQuery = `INSERT INTO ${versionTableName} (model_name, version_hash, updated_at) 
+                                     VALUES (?, ?, CURRENT_TIMESTAMP) 
+                                     ON DUPLICATE KEY UPDATE 
+                                     version_hash = VALUES(version_hash), updated_at = CURRENT_TIMESTAMP`;
+                        break;
+
+                    case 'sqlite':
+                    case 'postgres':
+                        upsertQuery = `INSERT INTO ${versionTableName} (model_name, version_hash, updated_at) 
+                                     VALUES (?, ?, CURRENT_TIMESTAMP) 
+                                     ON CONFLICT(model_name) 
+                                     DO UPDATE SET version_hash = excluded.version_hash, updated_at = CURRENT_TIMESTAMP`;
+                        break;
+
+                    case 'mssql':
+                        upsertQuery = `MERGE INTO ${versionTableName} AS T
+                                     USING (VALUES (?, ?, CURRENT_TIMESTAMP)) AS S (model_name, version_hash, updated_at)
+                                     ON (T.model_name = S.model_name)
+                                     WHEN MATCHED THEN
+                                         UPDATE SET T.version_hash = S.version_hash, T.updated_at = S.updated_at
+                                     WHEN NOT MATCHED THEN
+                                         INSERT (model_name, version_hash, updated_at) 
+                                         VALUES (S.model_name, S.version_hash, S.updated_at);`;
+                        break;
+
+                    default:
+                        logger.warn(`Dialect "${dialect}" does not have a custom UPSERT, attempting fallback to ON CONFLICT...`);
+                        upsertQuery = `INSERT INTO ${versionTableName} (model_name, version_hash, updated_at) 
+                                     VALUES (?, ?, CURRENT_TIMESTAMP) 
+                                     ON CONFLICT(model_name) 
+                                     DO UPDATE SET version_hash = excluded.version_hash, updated_at = CURRENT_TIMESTAMP`;
+                }
+
+                await sequelize.query(upsertQuery, {
+                    replacements: [model.name, newHash],
+
+                    type: sequelize.QueryTypes.INSERT,
+                });
             }
 
             logger.info('✨ Database sync completed successfully!');

@@ -280,8 +280,19 @@ class InteractionManager {
      * @private
      */
     async _handleButton(interaction) {
-        const handler = this.buttonHandlers.get(interaction.customId.split('_')[0]);
-        if (handler) await handler(interaction, this.container);
+        const customIdPrefix = interaction.customId.includes('|') 
+            ? interaction.customId.split('|')[0] 
+            : interaction.customId.split(':')[0];
+
+        const handler = this.buttonHandlers.get(customIdPrefix); 
+
+        if (handler) {
+            if (handler.length === 2) {
+                await handler(interaction, this.container);
+            } else {
+                await handler(interaction);
+            }
+        }
     }
 
     /**
