@@ -57,6 +57,18 @@ class AddonManager {
         }
         this.buttonHandlers.set(customId, handler);
     }
+    /**
+     * 🔽 Register Select Menu Handler
+     * Registers a handler function for a specific select menu customId prefix.
+     * @param {string} customIdPrefix - The prefix of the select menu customId
+     * @param {Function} handler - The handler function to execute
+     */
+    registerSelectMenuHandler(customIdPrefix, handler) {
+        if (this.selectMenuHandlers.has(customIdPrefix)) {
+            this.logger.warn(`[REGISTRATION] Warning: Select menu handler for [${customIdPrefix}] already exists and will be overwritten.`);
+        }
+        this.selectMenuHandlers.set(customIdPrefix, handler);
+    }
 
     /**
      * 📝 Register Modal Handler

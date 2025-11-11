@@ -800,43 +800,89 @@ class KythiaModel extends Model {
         return queryPromise;
     }
 
+    
     /**
-     * 📦 Attempts to find a record based on `options.where`. If found, it returns the cached or DB record.
+     * 📦 Finds a record by the specified where condition, using cache if available; if not found, creates it and caches the result.
+     * Will update an existing cached instance with defaults (if necessary) and save any new/changed data to both DB and cache.
      */
     static async findOrCreateWithCache(options) {
         if (!options || !options.where) {
             throw new Error("findOrCreateWithCache requires a 'where' option.");
         }
 
-        const { cacheTags, noCache, ...findOrCreateOptions } = options;
+        const { where, defaults, cacheTags, noCache, ...otherOptions } = options;
 
-        const cacheKey = this.getCacheKey(options.where);
-        const cacheResult = await this.getCachedEntry(cacheKey);
-        if (cacheResult.hit && cacheResult.data) {
-            return [cacheResult.data, false];
+        if (noCache) {
+            return this.findOrCreate(options);
         }
+
+        const normalizedWhere = this._normalizeFindOptions(where).where;
+        const cacheKey = this.getCacheKey(normalizedWhere);
+
+        const cacheResult = await this.getCachedEntry(cacheKey, otherOptions.include);
+
+        if (cacheResult.hit && cacheResult.data) {
+            const instance = cacheResult.data;
+            let needsUpdate = false;
+
+            if (defaults && typeof defaults === 'object') {
+                for (const key in defaults) {
+                    if (instance[key] === undefined || String(instance[key]) !== String(defaults[key])) {
+                        instance[key] = defaults[key];
+                        needsUpdate = true;
+                    }
+                }
+            }
+
+            if (needsUpdate) {
+                await instance.saveAndUpdateCache();
+            }
+
+            return [instance, false];
+        }
+
         this.cacheStats.misses++;
         if (this.pendingQueries.has(cacheKey)) {
             return this.pendingQueries.get(cacheKey);
         }
-        const findOrCreatePromise = this.findOrCreate(findOrCreateOptions)
-            .then(([instance, created]) => {
-                if (this.isRedisConnected || !this.isShardMode) {
-                    const tags = [`${this.name}`];
-                    if (instance) {
-                        const pk = this.primaryKeyAttribute;
-                        tags.push(`${this.name}:${pk}:${instance[pk]}`);
+
+        const findPromise = this.findOne({ where, ...otherOptions })
+            .then(async (instance) => {
+                if (instance) {
+                    let needsUpdate = false;
+                    if (defaults && typeof defaults === 'object') {
+                        for (const key in defaults) {
+                            if (instance[key] === undefined || String(instance[key]) !== String(defaults[key])) {
+                                instance[key] = defaults[key];
+                                needsUpdate = true;
+                            }
+                        }
                     }
-                    this.setCacheEntry(cacheKey, instance, undefined, tags);
+
+                    if (needsUpdate) {
+                        await instance.saveAndUpdateCache();
+                    } else {
+                        const tags = [`${this.name}`, `${this.name}:${this.primaryKeyAttribute}:${instance[this.primaryKeyAttribute]}`];
+                        await this.setCacheEntry(cacheKey, instance, undefined, tags);
+                    }
+
+                    return [instance, false];
+                } else {
+                    const createData = { ...where, ...defaults };
+                    const newInstance = await this.create(createData);
+
+                    const tags = [`${this.name}`, `${this.name}:${this.primaryKeyAttribute}:${newInstance[this.primaryKeyAttribute]}`];
+                    await this.setCacheEntry(cacheKey, newInstance, undefined, tags);
+
+                    return [newInstance, true];
                 }
-                return [instance, created];
             })
             .finally(() => {
                 this.pendingQueries.delete(cacheKey);
             });
 
-        this.pendingQueries.set(cacheKey, findOrCreatePromise);
-        return findOrCreatePromise;
+        this.pendingQueries.set(cacheKey, findPromise);
+        return findPromise;
     }
 
     /**

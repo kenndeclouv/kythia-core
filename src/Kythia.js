@@ -187,6 +187,17 @@ class Kythia {
             this.addonManager.registerModalHandler(customIdPrefix, handler);
         }
     }
+    /**
+     * 🟦 Register Select Menu Handler
+     * Delegates to AddonManager
+     * @param {string} customIdPrefix - The prefix of the select menu customId
+     * @param {Function} handler - The handler function to execute
+     */
+    registerSelectMenuHandler(customIdPrefix, handler) {
+        if (this.addonManager) {
+            this.addonManager.registerSelectMenuHandler(customIdPrefix, handler);
+        }
+    }
 
     /**
      * 🛡️ Validate License (Stub)

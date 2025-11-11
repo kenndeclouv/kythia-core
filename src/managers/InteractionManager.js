@@ -77,6 +77,8 @@ class InteractionManager {
                     await this._handleButton(interaction);
                 } else if (interaction.isModalSubmit()) {
                     await this._handleModalSubmit(interaction);
+                } else if (interaction.isAnySelectMenu()) {
+                    await this._handleSelectMenu(interaction);
                 } else if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
                     await this._handleContextMenuCommand(interaction, formatPerms);
                 }
@@ -222,11 +224,10 @@ class InteractionManager {
         }
 
         if (typeof command.execute === 'function') {
-            // Ensure logger is defined for the command execution context
             if (!interaction.logger) {
                 interaction.logger = this.logger;
             }
-            // Also inject logger into the container for legacy/compatibility
+
             if (this.container && !this.container.logger) {
                 this.container.logger = this.logger;
             }
@@ -280,17 +281,21 @@ class InteractionManager {
      * @private
      */
     async _handleButton(interaction) {
-        const customIdPrefix = interaction.customId.includes('|') 
-            ? interaction.customId.split('|')[0] 
-            : interaction.customId.split(':')[0];
+        const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
 
-        const handler = this.buttonHandlers.get(customIdPrefix); 
+        const handler = this.buttonHandlers.get(customIdPrefix);
 
         if (handler) {
-            if (handler.length === 2) {
-                await handler(interaction, this.container);
+            if (typeof handler === 'object' && typeof handler.execute === 'function') {
+                await handler.execute(interaction, this.container);
+            } else if (typeof handler === 'function') {
+                if (handler.length === 2) {
+                    await handler(interaction, this.container);
+                } else {
+                    await handler(interaction);
+                }
             } else {
-                await handler(interaction);
+                this.logger.error(`Handler for button ${customIdPrefix} has an invalid format`);
             }
         }
     }
@@ -301,10 +306,52 @@ class InteractionManager {
      */
     async _handleModalSubmit(interaction) {
         const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
-        this.logger.info('Modal submit - customId:', interaction.customId, 'prefix:', customIdPrefix);
+
+        this.logger.info(`Modal submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`);
+
         const handler = this.modalHandlers.get(customIdPrefix);
-        this.logger.info('Modal handler found:', !!handler);
-        if (handler) await handler(interaction, this.container);
+        this.logger.info(`Modal handler found: ${!!handler}`);
+
+        if (handler) {
+            if (typeof handler === 'object' && typeof handler.execute === 'function') {
+                await handler.execute(interaction, this.container);
+            } else if (typeof handler === 'function') {
+                if (handler.length === 2) {
+                    await handler(interaction, this.container);
+                } else {
+                    await handler(interaction);
+                }
+            } else {
+                this.logger.error(`Handler untuk modal ${customIdPrefix} formatnya salah (bukan fungsi atau { execute: ... })`);
+            }
+        }
+    }
+
+    /**
+     * Handle select menu interactions
+     * @private
+     */
+    async _handleSelectMenu(interaction) {
+        const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
+
+        this.logger.info(`Select menu submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`);
+
+        const handler = this.selectMenuHandlers.get(customIdPrefix);
+        this.logger.info(`Select menu handler found: ${!!handler}`);
+
+        if (handler) {
+            if (typeof handler === 'object' && typeof handler.execute === 'function') {
+                await handler.execute(interaction, this.container);
+            } else if (typeof handler === 'function') {
+                if (handler.length === 2) {
+                    await handler(interaction, this.container);
+                } else {
+                    await handler(interaction);
+                }
+            } else {
+                this.logger.error(`Handler untuk select menu ${customIdPrefix} formatnya salah`);
+            }
+        }
     }
 
     /**
@@ -417,7 +464,6 @@ class InteractionManager {
             }
         }
 
-        // Ensure logger is available in the execution context
         if (!interaction.logger) {
             interaction.logger = this.logger;
         }
