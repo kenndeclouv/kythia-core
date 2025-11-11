@@ -4,7 +4,7 @@
  * @file src/managers/EventManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.4-beta.3
+ * @version 0.9.5-beta
  *
  * @description
  * Handles all Discord event listeners except InteractionCreate.
