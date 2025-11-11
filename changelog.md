@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.9.5-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.3...v0.9.5-beta) (2025-11-11)
+
+
+### ✨ Added
+
+* Add select menu handler registration and interaction handling in Kythia and InteractionManager, enhancing user interaction capabilities. ([a27e84d](https://github.com/kenndeclouv/kythia-core/commit/a27e84d60f6f6077b073582f7c705eb28bc4d329))
+
 ### [0.9.4-beta.3](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.2...v0.9.4-beta.3) (2025-11-10)
 
 
