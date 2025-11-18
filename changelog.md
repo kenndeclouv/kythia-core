@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.9.6-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.9.5-beta...v0.9.6-beta) (2025-11-18)
+
+
+### ✨ Added
+
+* Enhance KythiaModel with Redis scheduling methods for adding, removing, and retrieving expired items, improving cache management and scheduling capabilities. ([b98160a](https://github.com/kenndeclouv/kythia-core/commit/b98160abfa8396e06b432c91740c62c8f3a9e084))
+
 ### [0.9.5-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.9.4-beta.3...v0.9.5-beta) (2025-11-11)
 
 
