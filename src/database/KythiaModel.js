@@ -100,16 +100,21 @@ class KythiaModel extends Model {
             this.logger.info('🟣 [REDIS][SHARD] Detected redis sharding mode (shard: true). Local fallback cache DISABLED!');
         }
 
+        this._redisFallbackURLs = [];
+
         if (Array.isArray(redisOptions)) {
-            this._redisFallbackURLs = redisOptions.slice();
+            this._redisFallbackURLs = redisOptions.filter((opt) => opt && (typeof opt !== 'string' || opt.trim().length > 0));
         } else if (typeof redisOptions === 'string') {
-            this._redisFallbackURLs = redisOptions.split(',').map((url) => url.trim());
+            if (redisOptions.trim().length > 0) {
+                this._redisFallbackURLs = redisOptions
+                    .split(',')
+                    .map((url) => url.trim())
+                    .filter((url) => url.length > 0);
+            }
         } else if (redisOptions && typeof redisOptions === 'object' && Array.isArray(redisOptions.urls)) {
             this._redisFallbackURLs = redisOptions.urls.slice();
-        } else if (redisOptions) {
+        } else if (redisOptions && typeof redisOptions === 'object' && Object.keys(redisOptions).length > 0) {
             this._redisFallbackURLs = [redisOptions];
-        } else {
-            this._redisFallbackURLs = [];
         }
 
         this._redisCurrentIndex = 0;
@@ -124,7 +129,7 @@ class KythiaModel extends Model {
                 this.logger.error('❌ [REDIS][SHARD] No Redis client/options, but shard:true. Application will work WITHOUT caching!');
                 this.isRedisConnected = false;
             } else {
-                this.logger.warn('🟠 [REDIS] No Redis client or options provided. Operating in In-Memory Cache mode only.');
+                this.logger.warn('🟠 [REDIS] No Redis provided. Switching to In-Memory Cache mode.');
                 this.isRedisConnected = false;
             }
         }
@@ -710,97 +715,140 @@ class KythiaModel extends Model {
      * In SHARD mode/fallback, cache miss triggers instant DB query, no in-memory caching.
      */
     static async getCache(keys, options = {}) {
-        if (options.noCache) {
-            const filteredOpts = { ...options };
-            delete filteredOpts.cacheTags;
-            return this.findOne(this._normalizeFindOptions(keys));
+        const { noCache, customCacheKey, ...queryOptions } = options;
+
+        if (noCache) {
+            const filteredOpts = this._normalizeFindOptions(queryOptions);
+            return this.findOne(filteredOpts);
         }
-        if (!keys || Array.isArray(keys)) {
-            if (Array.isArray(keys)) {
-                const pk = this.primaryKeyAttribute;
-                return this.findAll({ where: { [pk]: keys.map((m) => m[pk]) } });
-            }
+
+        if (Array.isArray(keys)) {
+            const pk = this.primaryKeyAttribute;
+            return this.findAll({ where: { [pk]: keys.map((m) => m[pk]) } });
+        }
+
+        const normalizedOptions = this._normalizeFindOptions(queryOptions || keys);
+        if ((!normalizedOptions.where && !keys) || (normalizedOptions.where && Object.keys(normalizedOptions.where).length === 0)) {
             return null;
         }
-        const normalizedOptions = this._normalizeFindOptions(keys);
-        if (!normalizedOptions.where || Object.keys(normalizedOptions.where).length === 0) return null;
-        const cacheKey = this.getCacheKey(normalizedOptions);
+
+        const cacheKey = customCacheKey || this.getCacheKey(normalizedOptions);
 
         const cacheResult = await this.getCachedEntry(cacheKey, normalizedOptions.include);
-        if (cacheResult.hit) {
-            return cacheResult.data;
-        }
+        if (cacheResult.hit) return cacheResult.data;
 
         this.cacheStats.misses++;
 
-        if (this.pendingQueries.has(cacheKey)) {
-            return this.pendingQueries.get(cacheKey);
-        }
+        if (this.pendingQueries.has(cacheKey)) return this.pendingQueries.get(cacheKey);
 
         const queryPromise = this.findOne(normalizedOptions)
             .then((record) => {
                 if (this.isRedisConnected || !this.isShardMode) {
                     const tags = [`${this.name}`];
-                    if (record) {
-                        const pk = this.primaryKeyAttribute;
-                        tags.push(`${this.name}:${pk}:${record[pk]}`);
-                    }
+                    if (record) tags.push(`${this.name}:${this.primaryKeyAttribute}:${record[this.primaryKeyAttribute]}`);
                     this.setCacheEntry(cacheKey, record, undefined, tags);
                 }
                 return record;
             })
-            .finally(() => {
-                this.pendingQueries.delete(cacheKey);
-            });
+            .finally(() => this.pendingQueries.delete(cacheKey));
 
         this.pendingQueries.set(cacheKey, queryPromise);
         return queryPromise;
     }
 
     /**
-     * 📦 Fetches an array of records from the cache, falling back to the database.
+     * 📦 Fetches multiple records.
+     * Added: options.customCacheKey & options.ttl
      */
     static async getAllCache(options = {}) {
-        const { cacheTags, noCache, ...queryOptions } = options || {};
+        const { cacheTags, noCache, customCacheKey, ttl, ...queryOptions } = options || {};
 
         if (noCache) {
             return this.findAll(this._normalizeFindOptions(queryOptions));
         }
+
         const normalizedOptions = this._normalizeFindOptions(queryOptions);
-        const cacheKey = this.getCacheKey(normalizedOptions);
+        const cacheKey = customCacheKey || this.getCacheKey(normalizedOptions);
 
         const cacheResult = await this.getCachedEntry(cacheKey, normalizedOptions.include);
-        if (cacheResult.hit) {
-            return cacheResult.data;
-        }
+        if (cacheResult.hit) return cacheResult.data;
 
         this.cacheStats.misses++;
 
-        if (this.pendingQueries.has(cacheKey)) {
-            return this.pendingQueries.get(cacheKey);
-        }
+        if (this.pendingQueries.has(cacheKey)) return this.pendingQueries.get(cacheKey);
 
         const queryPromise = this.findAll(normalizedOptions)
             .then((records) => {
                 if (this.isRedisConnected || !this.isShardMode) {
                     const tags = [`${this.name}`];
-
-                    if (Array.isArray(cacheTags)) {
-                        tags.push(...cacheTags);
-                    }
-                    this.setCacheEntry(cacheKey, records, undefined, tags);
+                    if (Array.isArray(cacheTags)) tags.push(...cacheTags);
+                    this.setCacheEntry(cacheKey, records, ttl, tags);
                 }
                 return records;
             })
-            .finally(() => {
-                this.pendingQueries.delete(cacheKey);
-            });
+            .finally(() => this.pendingQueries.delete(cacheKey));
 
         this.pendingQueries.set(cacheKey, queryPromise);
         return queryPromise;
     }
 
-    
+    /**
+     * 🕒 Tambah item ke Scheduler (Redis Sorted Set)
+     * @param {string} keySuffix - Suffix key (misal: 'active_schedule')
+     * @param {number} score - Timestamp/Score
+     * @param {string} value - Value (biasanya ID)
+     */
+    static async scheduleAdd(keySuffix, score, value) {
+        if (!this.isRedisConnected) return;
+        const key = `${this.name}:${keySuffix}`;
+        try {
+            await this.redis.zadd(key, score, value);
+        } catch (e) {
+            this._trackRedisError(e);
+        }
+    }
+
+    /**
+     * 🕒 Hapus item dari Scheduler
+     */
+    static async scheduleRemove(keySuffix, value) {
+        if (!this.isRedisConnected) return;
+        const key = `${this.name}:${keySuffix}`;
+        try {
+            await this.redis.zrem(key, value);
+        } catch (e) {
+            this._trackRedisError(e);
+        }
+    }
+
+    /**
+     * 🕒 Ambil item yang sudah expired (Score <= Now)
+     * @returns {Promise<string[]>} Array of IDs
+     */
+    static async scheduleGetExpired(keySuffix, scoreLimit = Date.now()) {
+        if (!this.isRedisConnected) return [];
+        const key = `${this.name}:${keySuffix}`;
+        try {
+            return await this.redis.zrangebyscore(key, 0, scoreLimit);
+        } catch (e) {
+            this._trackRedisError(e);
+            return [];
+        }
+    }
+
+    /**
+     * 🕒 Bersihkan Scheduler (Flush Key)
+     */
+    static async scheduleClear(keySuffix) {
+        if (!this.isRedisConnected) return;
+        const key = `${this.name}:${keySuffix}`;
+        try {
+            await this.redis.del(key);
+        } catch (e) {
+            this._trackRedisError(e);
+        }
+    }
+
     /**
      * 📦 Finds a record by the specified where condition, using cache if available; if not found, creates it and caches the result.
      * Will update an existing cached instance with defaults (if necessary) and save any new/changed data to both DB and cache.
