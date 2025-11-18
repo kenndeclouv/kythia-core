@@ -4,7 +4,7 @@
  * @file src/database/KythiaORM.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.5-beta
+ * @version 0.9.6-beta
  *
  * @description
  * A utility for intelligent, hash-based syncing of Sequelize models.
