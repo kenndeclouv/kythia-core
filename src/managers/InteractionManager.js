@@ -115,7 +115,10 @@ class InteractionManager {
         }
         if (!command) {
             this.logger.error(`Command not found for key: ${commandKey}`);
-            return interaction.reply({ content: await this.t(interaction, 'common.error.command.not.found'), ephemeral: true });
+            return interaction.reply({
+                content: await this.t(interaction, 'common.error.command.not.found'),
+                flags: MessageFlags.Ephemeral,
+            });
         }
 
         if (interaction.inGuild()) {
@@ -134,21 +137,22 @@ class InteractionManager {
         }
 
         if (command.guildOnly && !interaction.inGuild()) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), ephemeral: true });
+            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), flags: MessageFlags.Ephemeral });
         }
         if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), ephemeral: true });
+            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), flags: MessageFlags.Ephemeral });
         }
         if (command.teamOnly && !this.isOwner(interaction.user.id)) {
             const isTeamMember = await this.isTeam(interaction.user);
-            if (!isTeamMember) return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), ephemeral: true });
+            if (!isTeamMember)
+                return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), flags: MessageFlags.Ephemeral });
         }
         if (command.permissions && interaction.inGuild()) {
             const missingPerms = interaction.member.permissions.missing(command.permissions);
             if (missingPerms.length > 0)
                 return interaction.reply({
                     content: await this.t(interaction, 'common.error.user.missing.perms', { perms: formatPerms(missingPerms) }),
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
         }
         if (command.botPermissions && interaction.inGuild()) {
@@ -156,7 +160,7 @@ class InteractionManager {
             if (missingPerms.length > 0)
                 return interaction.reply({
                     content: await this.t(interaction, 'common.error.bot.missing.perms', { perms: formatPerms(missingPerms) }),
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
         }
 
@@ -177,7 +181,7 @@ class InteractionManager {
                         new ButtonBuilder()
                             .setLabel(
                                 await this.t(interaction, 'common.error.vote.locked.button', {
-                                    botName: interaction.client.user.username,
+                                    username: interaction.client.user.username,
                                 })
                             )
                             .setStyle(ButtonStyle.Link)
@@ -186,12 +190,13 @@ class InteractionManager {
                 );
                 container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
                 container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(await this.t(interaction, 'common.container.footer'))
+                    new TextDisplayBuilder().setContent(
+                        await this.t(interaction, 'common.container.footer', { username: interaction.client.user.username })
+                    )
                 );
                 return interaction.reply({
                     components: [container],
-                    ephemeral: true,
-                    flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
+                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
                 });
             }
         }
@@ -215,7 +220,7 @@ class InteractionManager {
                 if (now < expirationTime) {
                     const timeLeft = (expirationTime - now) / 1000;
                     const reply = await this.t(interaction, 'common.error.cooldown', { time: timeLeft.toFixed(1) });
-                    return interaction.reply({ content: reply, ephemeral: true });
+                    return interaction.reply({ content: reply, flags: MessageFlags.Ephemeral });
                 }
             }
 
@@ -238,7 +243,10 @@ class InteractionManager {
             }
         } else {
             this.logger.error("Command doesn't have a valid 'execute' function:", command.name || commandKey);
-            return interaction.reply({ content: await this.t(interaction, 'common.error.command.execution.invalid'), ephemeral: true });
+            return interaction.reply({
+                content: await this.t(interaction, 'common.error.command.execution.invalid'),
+                flags: MessageFlags.Ephemeral,
+            });
         }
     }
 
@@ -363,21 +371,22 @@ class InteractionManager {
         if (!command) return;
 
         if (command.guildOnly && !interaction.inGuild()) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), ephemeral: true });
+            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), flags: MessageFlags.Ephemeral });
         }
         if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), ephemeral: true });
+            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), flags: MessageFlags.Ephemeral });
         }
         if (command.teamOnly && !this.isOwner(interaction.user.id)) {
             const isTeamMember = await this.isTeam(interaction.user);
-            if (!isTeamMember) return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), ephemeral: true });
+            if (!isTeamMember)
+                return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), flags: MessageFlags.Ephemeral });
         }
         if (command.permissions && interaction.inGuild()) {
             const missingPerms = interaction.member.permissions.missing(command.permissions);
             if (missingPerms.length > 0)
                 return interaction.reply({
                     content: await this.t(interaction, 'common.error.user.missing.perms', { perms: formatPerms(missingPerms) }),
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
         }
         if (command.botPermissions && interaction.inGuild()) {
@@ -385,7 +394,7 @@ class InteractionManager {
             if (missingPerms.length > 0)
                 return interaction.reply({
                     content: await this.t(interaction, 'common.error.bot.missing.perms', { perms: formatPerms(missingPerms) }),
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
         }
         if (command.isInMainGuild && !this.isOwner(interaction.user.id)) {
@@ -458,8 +467,7 @@ class InteractionManager {
                 );
                 return interaction.reply({
                     components: [container],
-                    ephemeral: true,
-                    flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
+                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
                 });
             }
         }
@@ -572,14 +580,12 @@ class InteractionManager {
             if (interaction.replied || interaction.deferred) {
                 await interaction.followUp({
                     components,
-                    flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
                 });
             } else {
                 await interaction.reply({
                     components,
-                    flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
                 });
             }
         } catch (e) {
