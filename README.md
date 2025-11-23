@@ -289,10 +289,19 @@ module.exports = {
 
 -----
 
-## 🗄️ Database Layer (`KythiaModel` & `KythiaORM`)
+## 🗄️ Database Layer (`KythiaModel` & Migrations)
 
-  * **`KythiaModel`:** Provides a robust caching layer out-of-the-box. Extend it for all your models. Remember to call `KythiaModel.setDependencies` once. The hybrid Redis/Map cache ensures performance and resilience. Tag-based invalidation keeps caches fresh with precision.
-  * **`KythiaORM`:** Handles database synchronization safely. It only alters tables when necessary, preventing accidental data loss in production and speeding up development startup. Ensure all models extend `KythiaModel` and have a `static init(sequelize)` method for `KythiaORM` to discover and initialize them correctly.
+The core abandons traditional `sync()` operations in favor of a robust, **Laravel-style migration system** combined with **Database Introspection**.
+
+### 1. `KythiaModel` (The Base Model)
+* **Hybrid Caching:** Provides a zero-config caching layer. It prioritizes **Redis** for distributed caching and falls back to a local **LRU Map** if Redis is unreachable (Shard Mode aware).
+* **Auto-Boot Introspection:** You don't need to define attributes manually in your model classes. The `autoBoot` method automatically introspects the database table schema to define Sequelize attributes at runtime.
+* **Smart Invalidation:** Includes `afterSave`, `afterDestroy`, and `afterBulk` hooks that automatically invalidate cache entries using **tag-based sniper invalidation** (e.g., clearing `User:ID:1` also clears related queries).
+
+### 2. `KythiaMigrator` (Migration Engine)
+* **Addon Scanning:** Automatically discovers migration files located in `addons/*/database/migrations`.
+* **Laravel-Style Batching:** Uses a custom `LaravelStorage` adapter for Umzug. It tracks migration **batches** (not just files), allowing you to rollback the entire last deployment (batch) rather than one file at a time.
+* **Production Safe:** Schema changes are strictly handled via migration files, eliminating the risk of accidental data loss caused by `sequelize.sync({ alter: true })` in production environments.
 
 -----
 
@@ -304,4 +313,4 @@ module.exports = {
 
 ## 📜 License
 
-This project is licensed under the CC BY NC 4.0 License - see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the CC BY NC 4.0 License - see the [LICENSE](https://www.google.com/search?q=./LICENSE) file for details.

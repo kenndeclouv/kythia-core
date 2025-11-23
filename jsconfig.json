@@ -1,15 +1,3 @@
 {
-    "compilerOptions": {
-        "baseUrl": ".",
-        "paths": {
-            "@src/*": ["src/*"],
-            "@addons/*": ["addons/*"],
-            "@utils/*": ["src/utils/*"],
-            "@coreHelpers/*": ["addons/core/helpers/*"],
-            "@coreModels/*": ["addons/core/database/models/*"],
-            "@coreDatabase/*": ["addons/core/database/*"],
-            "@srcDatabase/*": ["src/database/*"]
-        }
-    },
-    "exclude": ["node_modules", "dist", "temp"]
+	"exclude": ["node_modules", "dist", "temp"]
 }

@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.6-beta
+ * @version 0.10.0-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -12,605 +12,804 @@
  */
 
 const {
-    Events,
-    Collection,
-    ButtonStyle,
-    MessageFlags,
-    EmbedBuilder,
-    ButtonBuilder,
-    WebhookClient,
-    SeparatorBuilder,
-    ActionRowBuilder,
-    ContainerBuilder,
-    TextDisplayBuilder,
-    SeparatorSpacingSize,
+	Events,
+	Collection,
+	ButtonStyle,
+	MessageFlags,
+	EmbedBuilder,
+	ButtonBuilder,
+	WebhookClient,
+	SeparatorBuilder,
+	ActionRowBuilder,
+	ContainerBuilder,
+	TextDisplayBuilder,
+	SeparatorSpacingSize,
 } = require('discord.js');
 const convertColor = require('../utils/color');
 const Sentry = require('@sentry/node');
 
 class InteractionManager {
-    /**
-     * 🏗️ InteractionManager Constructor
-     * @param {Object} client - Discord client instance
-     * @param {Object} container - Dependency container
-     * @param {Object} handlers - Handler maps from AddonManager
-     */
-    constructor({ client, container, handlers }) {
-        this.client = client;
-        this.container = container;
-        this.buttonHandlers = handlers.buttonHandlers;
-        this.modalHandlers = handlers.modalHandlers;
-        this.selectMenuHandlers = handlers.selectMenuHandlers;
-        this.autocompleteHandlers = handlers.autocompleteHandlers;
-        this.commandCategoryMap = handlers.commandCategoryMap;
-        this.categoryToFeatureMap = handlers.categoryToFeatureMap;
+	/**
+	 * 🏗️ InteractionManager Constructor
+	 * @param {Object} client - Discord client instance
+	 * @param {Object} container - Dependency container
+	 * @param {Object} handlers - Handler maps from AddonManager
+	 */
+	constructor({ client, container, handlers }) {
+		this.client = client;
+		this.container = container;
+		this.buttonHandlers = handlers.buttonHandlers;
+		this.modalHandlers = handlers.modalHandlers;
+		this.selectMenuHandlers = handlers.selectMenuHandlers;
+		this.autocompleteHandlers = handlers.autocompleteHandlers;
+		this.commandCategoryMap = handlers.commandCategoryMap;
+		this.categoryToFeatureMap = handlers.categoryToFeatureMap;
 
-        this.kythiaConfig = this.container.kythiaConfig;
-        this.models = this.container.models;
-        this.helpers = this.container.helpers;
+		this.kythiaConfig = this.container.kythiaConfig;
+		this.models = this.container.models;
+		this.helpers = this.container.helpers;
 
-        this.logger = this.container.logger;
-        this.t = this.container.t;
+		this.logger = this.container.logger;
+		this.t = this.container.t;
 
-        this.ServerSetting = this.models.ServerSetting;
-        this.KythiaVoter = this.models.KythiaVoter;
-        this.isTeam = this.helpers.discord.isTeam;
-        this.isOwner = this.helpers.discord.isOwner;
-    }
+		this.ServerSetting = this.models.ServerSetting;
+		this.KythiaVoter = this.models.KythiaVoter;
+		this.isTeam = this.helpers.discord.isTeam;
+		this.isOwner = this.helpers.discord.isOwner;
+	}
 
-    /**
-     * 🛎️ Initialize Interaction Handler
-     * Sets up the main Discord interaction handler for commands, autocomplete, buttons, and modals.
-     */
-    initialize() {
-        function formatPerms(permsArray) {
-            return permsArray.map((perm) => perm.replace(/([A-Z])/g, ' $1').trim()).join(', ');
-        }
+	/**
+	 * 🛎️ Initialize Interaction Handler
+	 * Sets up the main Discord interaction handler for commands, autocomplete, buttons, and modals.
+	 */
+	initialize() {
+		function formatPerms(permsArray) {
+			return permsArray
+				.map((perm) => perm.replace(/([A-Z])/g, ' $1').trim())
+				.join(', ');
+		}
 
-        this.client.on(Events.InteractionCreate, async (interaction) => {
-            try {
-                if (interaction.isChatInputCommand()) {
-                    await this._handleChatInputCommand(interaction, formatPerms);
-                } else if (interaction.isAutocomplete()) {
-                    await this._handleAutocomplete(interaction);
-                } else if (interaction.isButton()) {
-                    await this._handleButton(interaction);
-                } else if (interaction.isModalSubmit()) {
-                    await this._handleModalSubmit(interaction);
-                } else if (interaction.isAnySelectMenu()) {
-                    await this._handleSelectMenu(interaction);
-                } else if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
-                    await this._handleContextMenuCommand(interaction, formatPerms);
-                }
-            } catch (error) {
-                await this._handleInteractionError(interaction, error);
-            }
-        });
+		this.client.on(Events.InteractionCreate, async (interaction) => {
+			try {
+				if (interaction.isChatInputCommand()) {
+					await this._handleChatInputCommand(interaction, formatPerms);
+				} else if (interaction.isAutocomplete()) {
+					await this._handleAutocomplete(interaction);
+				} else if (interaction.isButton()) {
+					await this._handleButton(interaction);
+				} else if (interaction.isModalSubmit()) {
+					await this._handleModalSubmit(interaction);
+				} else if (interaction.isAnySelectMenu()) {
+					await this._handleSelectMenu(interaction);
+				} else if (
+					interaction.isUserContextMenuCommand() ||
+					interaction.isMessageContextMenuCommand()
+				) {
+					await this._handleContextMenuCommand(interaction, formatPerms);
+				}
+			} catch (error) {
+				await this._handleInteractionError(interaction, error);
+			}
+		});
 
-        this.client.on(Events.AutoModerationActionExecution, async (execution) => {
-            try {
-                await this._handleAutoModerationAction(execution);
-            } catch (err) {
-                this.logger.error(`[AutoMod Logger] Error during execution for ${execution.guild.name}:`, err);
-            }
-        });
-    }
+		this.client.on(Events.AutoModerationActionExecution, async (execution) => {
+			try {
+				await this._handleAutoModerationAction(execution);
+			} catch (err) {
+				this.logger.error(
+					`[AutoMod Logger] Error during execution for ${execution.guild.name}:`,
+					err,
+				);
+			}
+		});
+	}
 
-    /**
-     * Handle chat input commands
-     * @private
-     */
-    async _handleChatInputCommand(interaction, formatPerms) {
-        let commandKey = interaction.commandName;
-        const group = interaction.options.getSubcommandGroup(false);
-        const subcommand = interaction.options.getSubcommand(false);
+	/**
+	 * Handle chat input commands
+	 * @private
+	 */
+	async _handleChatInputCommand(interaction, formatPerms) {
+		let commandKey = interaction.commandName;
+		const group = interaction.options.getSubcommandGroup(false);
+		const subcommand = interaction.options.getSubcommand(false);
 
-        if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
-        else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
+		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
+		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
-        let command = this.client.commands.get(commandKey);
+		let command = this.client.commands.get(commandKey);
 
-        if (!command && (subcommand || group)) {
-            command = this.client.commands.get(interaction.commandName);
-        }
-        if (!command) {
-            this.logger.error(`Command not found for key: ${commandKey}`);
-            return interaction.reply({
-                content: await this.t(interaction, 'common.error.command.not.found'),
-                flags: MessageFlags.Ephemeral,
-            });
-        }
+		if (!command && (subcommand || group)) {
+			command = this.client.commands.get(interaction.commandName);
+		}
+		if (!command) {
+			this.logger.error(`Command not found for key: ${commandKey}`);
+			return interaction.reply({
+				content: await this.t(interaction, 'common.error.command.not.found'),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
 
-        if (interaction.inGuild()) {
-            const category = this.commandCategoryMap.get(interaction.commandName);
-            const featureFlag = this.categoryToFeatureMap.get(category);
+		if (interaction.inGuild()) {
+			const category = this.commandCategoryMap.get(interaction.commandName);
+			const featureFlag = this.categoryToFeatureMap.get(category);
 
-            if (featureFlag && !this.isOwner(interaction.user.id)) {
-                const settings = await this.ServerSetting.getCache({ guildId: interaction.guild.id });
+			if (featureFlag && !this.isOwner(interaction.user.id)) {
+				const settings = await this.ServerSetting.getCache({
+					guildId: interaction.guild.id,
+				});
 
-                if (settings && Object.prototype.hasOwnProperty.call(settings, featureFlag) && settings[featureFlag] === false) {
-                    const featureName = category.charAt(0).toUpperCase() + category.slice(1);
-                    const reply = await this.t(interaction, 'common.error.feature.disabled', { feature: featureName });
-                    return interaction.reply({ content: reply });
-                }
-            }
-        }
+				if (
+					settings &&
+					Object.hasOwn(settings, featureFlag) &&
+					settings[featureFlag] === false
+				) {
+					const featureName =
+						category.charAt(0).toUpperCase() + category.slice(1);
+					const reply = await this.t(
+						interaction,
+						'common.error.feature.disabled',
+						{ feature: featureName },
+					);
+					return interaction.reply({ content: reply });
+				}
+			}
+		}
 
-        if (command.guildOnly && !interaction.inGuild()) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.teamOnly && !this.isOwner(interaction.user.id)) {
-            const isTeamMember = await this.isTeam(interaction.user);
-            if (!isTeamMember)
-                return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.permissions && interaction.inGuild()) {
-            const missingPerms = interaction.member.permissions.missing(command.permissions);
-            if (missingPerms.length > 0)
-                return interaction.reply({
-                    content: await this.t(interaction, 'common.error.user.missing.perms', { perms: formatPerms(missingPerms) }),
-                    flags: MessageFlags.Ephemeral,
-                });
-        }
-        if (command.botPermissions && interaction.inGuild()) {
-            const missingPerms = interaction.guild.members.me.permissions.missing(command.botPermissions);
-            if (missingPerms.length > 0)
-                return interaction.reply({
-                    content: await this.t(interaction, 'common.error.bot.missing.perms', { perms: formatPerms(missingPerms) }),
-                    flags: MessageFlags.Ephemeral,
-                });
-        }
+		if (command.guildOnly && !interaction.inGuild()) {
+			return interaction.reply({
+				content: await this.t(interaction, 'common.error.guild.only'),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+		if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
+			return interaction.reply({
+				content: await this.t(interaction, 'common.error.not.owner'),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+		if (command.teamOnly && !this.isOwner(interaction.user.id)) {
+			const isTeamMember = await this.isTeam(interaction.user);
+			if (!isTeamMember)
+				return interaction.reply({
+					content: await this.t(interaction, 'common.error.not.team'),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
+		if (command.permissions && interaction.inGuild()) {
+			const missingPerms = interaction.member.permissions.missing(
+				command.permissions,
+			);
+			if (missingPerms.length > 0)
+				return interaction.reply({
+					content: await this.t(
+						interaction,
+						'common.error.user.missing.perms',
+						{ perms: formatPerms(missingPerms) },
+					),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
+		if (command.botPermissions && interaction.inGuild()) {
+			const missingPerms = interaction.guild.members.me.permissions.missing(
+				command.botPermissions,
+			);
+			if (missingPerms.length > 0)
+				return interaction.reply({
+					content: await this.t(interaction, 'common.error.bot.missing.perms', {
+						perms: formatPerms(missingPerms),
+					}),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
 
-        if (command.voteLocked && !this.isOwner(interaction.user.id)) {
-            const voter = await this.KythiaVoter.getCache({ userId: interaction.user.id });
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+		if (command.voteLocked && !this.isOwner(interaction.user.id)) {
+			const voter = await this.KythiaVoter.getCache({
+				userId: interaction.user.id,
+			});
+			const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
 
-            if (!voter || voter.votedAt < twelveHoursAgo) {
-                const container = new ContainerBuilder().setAccentColor(
-                    convertColor(this.kythiaConfig.bot.color, { from: 'hex', to: 'decimal' })
-                );
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(await this.t(interaction, 'common.error.vote.locked.text'))
-                );
-                container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-                container.addActionRowComponents(
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setLabel(
-                                await this.t(interaction, 'common.error.vote.locked.button', {
-                                    username: interaction.client.user.username,
-                                })
-                            )
-                            .setStyle(ButtonStyle.Link)
-                            .setURL(`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`)
-                    )
-                );
-                container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(
-                        await this.t(interaction, 'common.container.footer', { username: interaction.client.user.username })
-                    )
-                );
-                return interaction.reply({
-                    components: [container],
-                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-                });
-            }
-        }
+			if (!voter || voter.votedAt < twelveHoursAgo) {
+				const container = new ContainerBuilder().setAccentColor(
+					convertColor(this.kythiaConfig.bot.color, {
+						from: 'hex',
+						to: 'decimal',
+					}),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.error.vote.locked.text'),
+					),
+				);
+				container.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				);
+				container.addActionRowComponents(
+					new ActionRowBuilder().addComponents(
+						new ButtonBuilder()
+							.setLabel(
+								await this.t(interaction, 'common.error.vote.locked.button', {
+									username: interaction.client.user.username,
+								}),
+							)
+							.setStyle(ButtonStyle.Link)
+							.setURL(
+								`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`,
+							),
+					),
+				);
+				container.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.container.footer', {
+							username: interaction.client.user.username,
+						}),
+					),
+				);
+				return interaction.reply({
+					components: [container],
+					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+				});
+			}
+		}
 
-        const cooldownDuration = command.cooldown ?? this.kythiaConfig.bot.globalCommandCooldown ?? 0;
+		const cooldownDuration =
+			command.cooldown ?? this.kythiaConfig.bot.globalCommandCooldown ?? 0;
 
-        if (cooldownDuration > 0 && !this.isOwner(interaction.user.id)) {
-            const { cooldowns } = this.client;
+		if (cooldownDuration > 0 && !this.isOwner(interaction.user.id)) {
+			const { cooldowns } = this.client;
 
-            if (!cooldowns.has(command.name)) {
-                cooldowns.set(command.name, new Collection());
-            }
+			if (!cooldowns.has(command.name)) {
+				cooldowns.set(command.name, new Collection());
+			}
 
-            const now = Date.now();
-            const timestamps = cooldowns.get(command.name);
-            const cooldownAmount = cooldownDuration * 1000;
+			const now = Date.now();
+			const timestamps = cooldowns.get(command.name);
+			const cooldownAmount = cooldownDuration * 1000;
 
-            if (timestamps.has(interaction.user.id)) {
-                const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
+			if (timestamps.has(interaction.user.id)) {
+				const expirationTime =
+					timestamps.get(interaction.user.id) + cooldownAmount;
 
-                if (now < expirationTime) {
-                    const timeLeft = (expirationTime - now) / 1000;
-                    const reply = await this.t(interaction, 'common.error.cooldown', { time: timeLeft.toFixed(1) });
-                    return interaction.reply({ content: reply, flags: MessageFlags.Ephemeral });
-                }
-            }
+				if (now < expirationTime) {
+					const timeLeft = (expirationTime - now) / 1000;
+					const reply = await this.t(interaction, 'common.error.cooldown', {
+						time: timeLeft.toFixed(1),
+					});
+					return interaction.reply({
+						content: reply,
+						flags: MessageFlags.Ephemeral,
+					});
+				}
+			}
 
-            timestamps.set(interaction.user.id, now);
-            setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-        }
+			timestamps.set(interaction.user.id, now);
+			setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+		}
 
-        if (typeof command.execute === 'function') {
-            if (!interaction.logger) {
-                interaction.logger = this.logger;
-            }
+		if (typeof command.execute === 'function') {
+			if (!interaction.logger) {
+				interaction.logger = this.logger;
+			}
 
-            if (this.container && !this.container.logger) {
-                this.container.logger = this.logger;
-            }
-            if (command.execute.length === 2) {
-                await command.execute(interaction, this.container);
-            } else {
-                await command.execute(interaction);
-            }
-        } else {
-            this.logger.error("Command doesn't have a valid 'execute' function:", command.name || commandKey);
-            return interaction.reply({
-                content: await this.t(interaction, 'common.error.command.execution.invalid'),
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-    }
+			if (this.container && !this.container.logger) {
+				this.container.logger = this.logger;
+			}
+			if (command.execute.length === 2) {
+				await command.execute(interaction, this.container);
+			} else {
+				await command.execute(interaction);
+			}
+		} else {
+			this.logger.error(
+				"Command doesn't have a valid 'execute' function:",
+				command.name || commandKey,
+			);
+			return interaction.reply({
+				content: await this.t(
+					interaction,
+					'common.error.command.execution.invalid',
+				),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+	}
 
-    /**
-     * Handle autocomplete interactions
-     * @private
-     */
-    async _handleAutocomplete(interaction) {
-        let commandKey = interaction.commandName;
-        const group = interaction.options.getSubcommandGroup(false);
-        const subcommand = interaction.options.getSubcommand(false);
+	/**
+	 * Handle autocomplete interactions
+	 * @private
+	 */
+	async _handleAutocomplete(interaction) {
+		let commandKey = interaction.commandName;
+		const group = interaction.options.getSubcommandGroup(false);
+		const subcommand = interaction.options.getSubcommand(false);
 
-        if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
-        else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
+		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
+		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
-        let handler = this.autocompleteHandlers.get(commandKey);
+		let handler = this.autocompleteHandlers.get(commandKey);
 
-        if (!handler && (subcommand || group)) {
-            handler = this.autocompleteHandlers.get(interaction.commandName);
-        }
+		if (!handler && (subcommand || group)) {
+			handler = this.autocompleteHandlers.get(interaction.commandName);
+		}
 
-        if (handler) {
-            try {
-                await handler(interaction, this.container);
-            } catch (err) {
-                this.logger.error(`Error in autocomplete handler for ${commandKey}:`, err);
-                try {
-                    await interaction.respond([]);
-                } catch (e) {}
-            }
-        } else {
-            try {
-                await interaction.respond([]);
-            } catch (e) {}
-        }
-    }
+		if (handler) {
+			try {
+				await handler(interaction, this.container);
+			} catch (err) {
+				this.logger.error(
+					`Error in autocomplete handler for ${commandKey}:`,
+					err,
+				);
+				try {
+					await interaction.respond([]);
+				} catch (e) {
+					this.logger.error(e);
+				}
+			}
+		} else {
+			try {
+				await interaction.respond([]);
+			} catch (e) {
+				this.logger.error(e);
+			}
+		}
+	}
 
-    /**
-     * Handle button interactions
-     * @private
-     */
-    async _handleButton(interaction) {
-        const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
+	/**
+	 * Handle button interactions
+	 * @private
+	 */
+	async _handleButton(interaction) {
+		const customIdPrefix = interaction.customId.includes('|')
+			? interaction.customId.split('|')[0]
+			: interaction.customId.split(':')[0];
 
-        const handler = this.buttonHandlers.get(customIdPrefix);
+		const handler = this.buttonHandlers.get(customIdPrefix);
 
-        if (handler) {
-            if (typeof handler === 'object' && typeof handler.execute === 'function') {
-                await handler.execute(interaction, this.container);
-            } else if (typeof handler === 'function') {
-                if (handler.length === 2) {
-                    await handler(interaction, this.container);
-                } else {
-                    await handler(interaction);
-                }
-            } else {
-                this.logger.error(`Handler for button ${customIdPrefix} has an invalid format`);
-            }
-        }
-    }
+		if (handler) {
+			if (
+				typeof handler === 'object' &&
+				typeof handler.execute === 'function'
+			) {
+				await handler.execute(interaction, this.container);
+			} else if (typeof handler === 'function') {
+				if (handler.length === 2) {
+					await handler(interaction, this.container);
+				} else {
+					await handler(interaction);
+				}
+			} else {
+				this.logger.error(
+					`Handler for button ${customIdPrefix} has an invalid format`,
+				);
+			}
+		}
+	}
 
-    /**
-     * Handle modal submit interactions
-     * @private
-     */
-    async _handleModalSubmit(interaction) {
-        const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
+	/**
+	 * Handle modal submit interactions
+	 * @private
+	 */
+	async _handleModalSubmit(interaction) {
+		const customIdPrefix = interaction.customId.includes('|')
+			? interaction.customId.split('|')[0]
+			: interaction.customId.split(':')[0];
 
-        this.logger.info(`Modal submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`);
+		this.logger.info(
+			`Modal submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
+		);
 
-        const handler = this.modalHandlers.get(customIdPrefix);
-        this.logger.info(`Modal handler found: ${!!handler}`);
+		const handler = this.modalHandlers.get(customIdPrefix);
+		this.logger.info(`Modal handler found: ${!!handler}`);
 
-        if (handler) {
-            if (typeof handler === 'object' && typeof handler.execute === 'function') {
-                await handler.execute(interaction, this.container);
-            } else if (typeof handler === 'function') {
-                if (handler.length === 2) {
-                    await handler(interaction, this.container);
-                } else {
-                    await handler(interaction);
-                }
-            } else {
-                this.logger.error(`Handler untuk modal ${customIdPrefix} formatnya salah (bukan fungsi atau { execute: ... })`);
-            }
-        }
-    }
+		if (handler) {
+			if (
+				typeof handler === 'object' &&
+				typeof handler.execute === 'function'
+			) {
+				await handler.execute(interaction, this.container);
+			} else if (typeof handler === 'function') {
+				if (handler.length === 2) {
+					await handler(interaction, this.container);
+				} else {
+					await handler(interaction);
+				}
+			} else {
+				this.logger.error(
+					`Handler untuk modal ${customIdPrefix} formatnya salah (bukan fungsi atau { execute: ... })`,
+				);
+			}
+		}
+	}
 
-    /**
-     * Handle select menu interactions
-     * @private
-     */
-    async _handleSelectMenu(interaction) {
-        const customIdPrefix = interaction.customId.includes('|') ? interaction.customId.split('|')[0] : interaction.customId.split(':')[0];
+	/**
+	 * Handle select menu interactions
+	 * @private
+	 */
+	async _handleSelectMenu(interaction) {
+		const customIdPrefix = interaction.customId.includes('|')
+			? interaction.customId.split('|')[0]
+			: interaction.customId.split(':')[0];
 
-        this.logger.info(`Select menu submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`);
+		this.logger.info(
+			`Select menu submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
+		);
 
-        const handler = this.selectMenuHandlers.get(customIdPrefix);
-        this.logger.info(`Select menu handler found: ${!!handler}`);
+		const handler = this.selectMenuHandlers.get(customIdPrefix);
+		this.logger.info(`Select menu handler found: ${!!handler}`);
 
-        if (handler) {
-            if (typeof handler === 'object' && typeof handler.execute === 'function') {
-                await handler.execute(interaction, this.container);
-            } else if (typeof handler === 'function') {
-                if (handler.length === 2) {
-                    await handler(interaction, this.container);
-                } else {
-                    await handler(interaction);
-                }
-            } else {
-                this.logger.error(`Handler untuk select menu ${customIdPrefix} formatnya salah`);
-            }
-        }
-    }
+		if (handler) {
+			if (
+				typeof handler === 'object' &&
+				typeof handler.execute === 'function'
+			) {
+				await handler.execute(interaction, this.container);
+			} else if (typeof handler === 'function') {
+				if (handler.length === 2) {
+					await handler(interaction, this.container);
+				} else {
+					await handler(interaction);
+				}
+			} else {
+				this.logger.error(
+					`Handler untuk select menu ${customIdPrefix} formatnya salah`,
+				);
+			}
+		}
+	}
 
-    /**
-     * Handle context menu commands
-     * @private
-     */
-    async _handleContextMenuCommand(interaction, formatPerms) {
-        const command = this.client.commands.get(interaction.commandName);
-        if (!command) return;
+	/**
+	 * Handle context menu commands
+	 * @private
+	 */
+	async _handleContextMenuCommand(interaction, formatPerms) {
+		const command = this.client.commands.get(interaction.commandName);
+		if (!command) return;
 
-        if (command.guildOnly && !interaction.inGuild()) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.guild.only'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-            return interaction.reply({ content: await this.t(interaction, 'common.error.not.owner'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.teamOnly && !this.isOwner(interaction.user.id)) {
-            const isTeamMember = await this.isTeam(interaction.user);
-            if (!isTeamMember)
-                return interaction.reply({ content: await this.t(interaction, 'common.error.not.team'), flags: MessageFlags.Ephemeral });
-        }
-        if (command.permissions && interaction.inGuild()) {
-            const missingPerms = interaction.member.permissions.missing(command.permissions);
-            if (missingPerms.length > 0)
-                return interaction.reply({
-                    content: await this.t(interaction, 'common.error.user.missing.perms', { perms: formatPerms(missingPerms) }),
-                    flags: MessageFlags.Ephemeral,
-                });
-        }
-        if (command.botPermissions && interaction.inGuild()) {
-            const missingPerms = interaction.guild.members.me.permissions.missing(command.botPermissions);
-            if (missingPerms.length > 0)
-                return interaction.reply({
-                    content: await this.t(interaction, 'common.error.bot.missing.perms', { perms: formatPerms(missingPerms) }),
-                    flags: MessageFlags.Ephemeral,
-                });
-        }
-        if (command.isInMainGuild && !this.isOwner(interaction.user.id)) {
-            const mainGuild = this.client.guilds.cache.get(this.kythiaConfig.bot.mainGuildId);
-            if (!mainGuild) {
-                this.logger.error(
-                    `❌ [isInMainGuild Check] Error: Bot is not a member of the main guild specified in config: ${this.kythiaConfig.bot.mainGuildId}`
-                );
-            }
-            try {
-                await mainGuild.members.fetch(interaction.user.id);
-            } catch (error) {
-                const container = new ContainerBuilder().setAccentColor(
-                    convertColor(this.kythiaConfig.bot.color, { from: 'hex', to: 'decimal' })
-                );
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(
-                        await this.t(interaction, 'common.error.not.in.main.guild.text', { name: mainGuild.name })
-                    )
-                );
-                container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-                container.addActionRowComponents(
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setLabel(await this.t(interaction, 'common.error.not.in.main.guild.button.join'))
-                            .setStyle(ButtonStyle.Link)
-                            .setURL(this.kythiaConfig.settings.supportServer)
-                    )
-                );
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(
-                        await this.t(interaction, 'common.container.footer', { username: interaction.client.user.username })
-                    )
-                );
-                return interaction.reply({
-                    components: [container],
-                    flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
-                });
-            }
-        }
-        if (command.voteLocked && !this.isOwner(interaction.user.id)) {
-            const voter = await this.KythiaVoter.getCache({ userId: interaction.user.id });
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+		if (command.guildOnly && !interaction.inGuild()) {
+			return interaction.reply({
+				content: await this.t(interaction, 'common.error.guild.only'),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+		if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
+			return interaction.reply({
+				content: await this.t(interaction, 'common.error.not.owner'),
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+		if (command.teamOnly && !this.isOwner(interaction.user.id)) {
+			const isTeamMember = await this.isTeam(interaction.user);
+			if (!isTeamMember)
+				return interaction.reply({
+					content: await this.t(interaction, 'common.error.not.team'),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
+		if (command.permissions && interaction.inGuild()) {
+			const missingPerms = interaction.member.permissions.missing(
+				command.permissions,
+			);
+			if (missingPerms.length > 0)
+				return interaction.reply({
+					content: await this.t(
+						interaction,
+						'common.error.user.missing.perms',
+						{ perms: formatPerms(missingPerms) },
+					),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
+		if (command.botPermissions && interaction.inGuild()) {
+			const missingPerms = interaction.guild.members.me.permissions.missing(
+				command.botPermissions,
+			);
+			if (missingPerms.length > 0)
+				return interaction.reply({
+					content: await this.t(interaction, 'common.error.bot.missing.perms', {
+						perms: formatPerms(missingPerms),
+					}),
+					flags: MessageFlags.Ephemeral,
+				});
+		}
+		if (command.isInMainGuild && !this.isOwner(interaction.user.id)) {
+			const mainGuild = this.client.guilds.cache.get(
+				this.kythiaConfig.bot.mainGuildId,
+			);
+			if (!mainGuild) {
+				this.logger.error(
+					`❌ [isInMainGuild Check] Error: Bot is not a member of the main guild specified in config: ${this.kythiaConfig.bot.mainGuildId}`,
+				);
+			}
+			try {
+				await mainGuild.members.fetch(interaction.user.id);
+			} catch (error) {
+				const container = new ContainerBuilder().setAccentColor(
+					convertColor(this.kythiaConfig.bot.color, {
+						from: 'hex',
+						to: 'decimal',
+					}),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.error.not.in.main.guild.text', {
+							name: mainGuild.name,
+						}),
+					),
+				);
+				container.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				);
+				container.addActionRowComponents(
+					new ActionRowBuilder().addComponents(
+						new ButtonBuilder()
+							.setLabel(
+								await this.t(
+									interaction,
+									'common.error.not.in.main.guild.button.join',
+								),
+							)
+							.setStyle(ButtonStyle.Link)
+							.setURL(this.kythiaConfig.settings.supportServer),
+					),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.container.footer', {
+							username: interaction.client.user.username,
+						}),
+					),
+				);
+				this.logger.error(error);
+				return interaction.reply({
+					components: [container],
+					flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
+				});
+			}
+		}
+		if (command.voteLocked && !this.isOwner(interaction.user.id)) {
+			const voter = await this.KythiaVoter.getCache({
+				userId: interaction.user.id,
+			});
+			const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
 
-            if (!voter || voter.votedAt < twelveHoursAgo) {
-                const container = new ContainerBuilder().setAccentColor(
-                    convertColor(this.kythiaConfig.bot.color, { from: 'hex', to: 'decimal' })
-                );
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(await this.t(interaction, 'common.error.vote.locked.text'))
-                );
-                container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-                container.addActionRowComponents(
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setLabel(
-                                await this.t(interaction, 'common.error.vote.locked.button', {
-                                    username: interaction.client.user.username,
-                                })
-                            )
-                            .setStyle(ButtonStyle.Link)
-                            .setURL(`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`)
-                    )
-                );
-                container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-                container.addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(
-                        await this.t(interaction, 'common.container.footer', { username: interaction.client.user.username })
-                    )
-                );
-                return interaction.reply({
-                    components: [container],
-                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-                });
-            }
-        }
+			if (!voter || voter.votedAt < twelveHoursAgo) {
+				const container = new ContainerBuilder().setAccentColor(
+					convertColor(this.kythiaConfig.bot.color, {
+						from: 'hex',
+						to: 'decimal',
+					}),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.error.vote.locked.text'),
+					),
+				);
+				container.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				);
+				container.addActionRowComponents(
+					new ActionRowBuilder().addComponents(
+						new ButtonBuilder()
+							.setLabel(
+								await this.t(interaction, 'common.error.vote.locked.button', {
+									username: interaction.client.user.username,
+								}),
+							)
+							.setStyle(ButtonStyle.Link)
+							.setURL(
+								`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`,
+							),
+					),
+				);
+				container.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				);
+				container.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.container.footer', {
+							username: interaction.client.user.username,
+						}),
+					),
+				);
+				return interaction.reply({
+					components: [container],
+					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+				});
+			}
+		}
 
-        if (!interaction.logger) {
-            interaction.logger = this.logger;
-        }
-        if (this.container && !this.container.logger) {
-            this.container.logger = this.logger;
-        }
-        await command.execute(interaction, this.container);
-    }
+		if (!interaction.logger) {
+			interaction.logger = this.logger;
+		}
+		if (this.container && !this.container.logger) {
+			this.container.logger = this.logger;
+		}
+		await command.execute(interaction, this.container);
+	}
 
-    /**
-     * Handle AutoModeration action execution
-     * @private
-     */
-    async _handleAutoModerationAction(execution) {
-        const guildId = execution.guild.id;
-        const ruleName = execution.ruleTriggerType.toString();
+	/**
+	 * Handle AutoModeration action execution
+	 * @private
+	 */
+	async _handleAutoModerationAction(execution) {
+		const guildId = execution.guild.id;
+		const ruleName = execution.ruleTriggerType.toString();
 
-        const settings = await this.ServerSetting.getCache({ guildId: guildId });
-        const locale = execution.guild.preferredLocale;
+		const settings = await this.ServerSetting.getCache({ guildId: guildId });
+		const locale = execution.guild.preferredLocale;
 
-        if (!settings || !settings.modLogChannelId) {
-            return;
-        }
+		if (!settings || !settings.modLogChannelId) {
+			return;
+		}
 
-        const logChannelId = settings.modLogChannelId;
-        const logChannel = await execution.guild.channels.fetch(logChannelId).catch(() => null);
+		const logChannelId = settings.modLogChannelId;
+		const logChannel = await execution.guild.channels
+			.fetch(logChannelId)
+			.catch(() => null);
 
-        if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setColor('Red')
-                .setDescription(
-                    await this.t(
-                        null,
-                        'common.automod',
-                        {
-                            ruleName: ruleName,
-                        },
-                        locale
-                    )
-                )
-                .addFields(
-                    {
-                        name: await this.t(null, 'common.automod.field.user', {}, locale),
-                        value: `${execution.user.tag} (${execution.userId})`,
-                        inline: true,
-                    },
-                    { name: await this.t(null, 'common.automod.field.rule.trigger', {}, locale), value: `\`${ruleName}\``, inline: true }
-                )
-                .setFooter({
-                    text: await this.t(
-                        null,
-                        'common.embed.footer',
-                        {
-                            username: execution.guild.client.user.username,
-                        },
-                        locale
-                    ),
-                })
-                .setTimestamp();
+		if (logChannel) {
+			const embed = new EmbedBuilder()
+				.setColor('Red')
+				.setDescription(
+					await this.t(
+						null,
+						'common.automod',
+						{
+							ruleName: ruleName,
+						},
+						locale,
+					),
+				)
+				.addFields(
+					{
+						name: await this.t(null, 'common.automod.field.user', {}, locale),
+						value: `${execution.user.tag} (${execution.userId})`,
+						inline: true,
+					},
+					{
+						name: await this.t(
+							null,
+							'common.automod.field.rule.trigger',
+							{},
+							locale,
+						),
+						value: `\`${ruleName}\``,
+						inline: true,
+					},
+				)
+				.setFooter({
+					text: await this.t(
+						null,
+						'common.embed.footer',
+						{
+							username: execution.guild.client.user.username,
+						},
+						locale,
+					),
+				})
+				.setTimestamp();
 
-            await logChannel.send({ embeds: [embed] });
-        }
-    }
+			await logChannel.send({ embeds: [embed] });
+		}
+	}
 
-    /**
-     * Handle interaction errors
-     * @private
-     */
-    async _handleInteractionError(interaction, error) {
-        this.logger.error(`Error in interaction handler for ${interaction.user.tag}:`, error);
+	/**
+	 * Handle interaction errors
+	 * @private
+	 */
+	async _handleInteractionError(interaction, error) {
+		this.logger.error(
+			`Error in interaction handler for ${interaction.user.tag}:`,
+			error,
+		);
 
-        if (this.kythiaConfig.sentry && this.kythiaConfig.sentry.dsn) {
-            Sentry.withScope((scope) => {
-                scope.setUser({ id: interaction.user.id, username: interaction.user.tag });
-                scope.setTag('command', interaction.commandName);
-                if (interaction.guild) {
-                    scope.setContext('guild', {
-                        id: interaction.guild.id,
-                        name: interaction.guild.name,
-                    });
-                }
-                Sentry.captureException(error);
-            });
-        }
+		if (this.kythiaConfig.sentry?.dsn) {
+			Sentry.withScope((scope) => {
+				scope.setUser({
+					id: interaction.user.id,
+					username: interaction.user.tag,
+				});
+				scope.setTag('command', interaction.commandName);
+				if (interaction.guild) {
+					scope.setContext('guild', {
+						id: interaction.guild.id,
+						name: interaction.guild.name,
+					});
+				}
+				Sentry.captureException(error);
+			});
+		}
 
-        const ownerFirstId = this.kythiaConfig.owner.ids.split(',')[0].trim();
-        const components = [
-            new ContainerBuilder()
-                .setAccentColor(convertColor('Red', { from: 'discord', to: 'decimal' }))
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent(await this.t(interaction, 'common.error.generic')))
-                .addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-                .addActionRowComponents(
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setStyle(ButtonStyle.Link)
-                            .setLabel(await this.t(interaction, 'common.error.button.join.support.server'))
-                            .setURL(this.kythiaConfig.settings.supportServer),
-                        new ButtonBuilder()
-                            .setStyle(ButtonStyle.Link)
-                            .setLabel(await this.t(interaction, 'common.error.button.contact.owner'))
-                            .setURL(`discord://-/users/${ownerFirstId}`)
-                    )
-                ),
-        ];
-        try {
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({
-                    components,
-                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-                });
-            } else {
-                await interaction.reply({
-                    components,
-                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-                });
-            }
-        } catch (e) {
-            this.logger.error('Failed to send interaction error message:', e);
-        }
+		const ownerFirstId = this.kythiaConfig.owner.ids.split(',')[0].trim();
+		const components = [
+			new ContainerBuilder()
+				.setAccentColor(convertColor('Red', { from: 'discord', to: 'decimal' }))
+				.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.error.generic'),
+					),
+				)
+				.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				)
+				.addActionRowComponents(
+					new ActionRowBuilder().addComponents(
+						new ButtonBuilder()
+							.setStyle(ButtonStyle.Link)
+							.setLabel(
+								await this.t(
+									interaction,
+									'common.error.button.join.support.server',
+								),
+							)
+							.setURL(this.kythiaConfig.settings.supportServer),
+						new ButtonBuilder()
+							.setStyle(ButtonStyle.Link)
+							.setLabel(
+								await this.t(interaction, 'common.error.button.contact.owner'),
+							)
+							.setURL(`discord://-/users/${ownerFirstId}`),
+					),
+				),
+		];
+		try {
+			if (interaction.replied || interaction.deferred) {
+				await interaction.followUp({
+					components,
+					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+				});
+			} else {
+				await interaction.reply({
+					components,
+					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+				});
+			}
+		} catch (e) {
+			this.logger.error('Failed to send interaction error message:', e);
+		}
 
-        try {
-            if (
-                this.kythiaConfig.api &&
-                this.kythiaConfig.api.webhookErrorLogs &&
-                this.kythiaConfig.settings &&
-                this.kythiaConfig.settings.webhookErrorLogs === true
-            ) {
-                const webhookClient = new WebhookClient({ url: this.kythiaConfig.api.webhookErrorLogs });
-                const errorEmbed = new EmbedBuilder()
-                    .setColor('Red')
-                    .setDescription(`## ❌ Error at ${interaction.user.tag}\n` + `\`\`\`${error.stack}\`\`\``)
-                    .setFooter({ text: interaction.guild ? `Error from server ${interaction.guild.name}` : 'Error from DM' })
-                    .setTimestamp();
-                await webhookClient.send({ embeds: [errorEmbed] });
-            }
-        } catch (webhookErr) {
-            this.logger.error('Error sending interaction error webhook:', webhookErr);
-        }
-    }
+		try {
+			if (
+				this.kythiaConfig.api?.webhookErrorLogs &&
+				this.kythiaConfig.settings &&
+				this.kythiaConfig.settings.webhookErrorLogs === true
+			) {
+				const webhookClient = new WebhookClient({
+					url: this.kythiaConfig.api.webhookErrorLogs,
+				});
+				const errorEmbed = new EmbedBuilder()
+					.setColor('Red')
+					.setDescription(
+						`## ❌ Error at ${interaction.user.tag}\n` +
+							`\`\`\`${error.stack}\`\`\``,
+					)
+					.setFooter({
+						text: interaction.guild
+							? `Error from server ${interaction.guild.name}`
+							: 'Error from DM',
+					})
+					.setTimestamp();
+				await webhookClient.send({ embeds: [errorEmbed] });
+			}
+		} catch (webhookErr) {
+			this.logger.error('Error sending interaction error webhook:', webhookErr);
+		}
+	}
 }
 
 module.exports = InteractionManager;

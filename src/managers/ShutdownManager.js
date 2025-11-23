@@ -4,7 +4,7 @@
  * @file src/managers/ShutdownManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.6-beta
+ * @version 0.10.0-beta
  *
  * @description
  * Handles graceful shutdown procedures including interval tracking,
@@ -14,184 +14,205 @@
 const exitHook = require('async-exit-hook');
 
 class ShutdownManager {
-    /**
-     * 🏗️ ShutdownManager Constructor
-     * @param {Object} client - Discord client instance
-     * @param {Object} container - Dependency container
-     */
-    constructor({ client, container }) {
-        this.client = client;
-        this.container = container;
-        this._activeIntervals = new Set();
-        this._messagesWithActiveCollectors = new Set();
-        this._collectorPatched = false;
-        this._cleanupAttached = false;
+	/**
+	 * 🏗️ ShutdownManager Constructor
+	 * @param {Object} client - Discord client instance
+	 * @param {Object} container - Dependency container
+	 */
+	constructor({ client, container }) {
+		this.client = client;
+		this.container = container;
+		this._activeIntervals = new Set();
+		this._messagesWithActiveCollectors = new Set();
+		this._collectorPatched = false;
+		this._cleanupAttached = false;
 
-        this.logger = this.container.logger;
-    }
+		this.logger = this.container.logger;
+	}
 
-    /**
-     * 🕵️‍♂️ [GLOBAL PATCH] Overrides global interval functions to track all active intervals.
-     * This allows for a truly generic and scalable graceful shutdown of all timed tasks.
-     */
-    initializeGlobalIntervalTracker() {
-        if (!this._activeIntervals) this._activeIntervals = new Set();
+	/**
+	 * 🕵️‍♂️ [GLOBAL PATCH] Overrides global interval functions to track all active intervals.
+	 * This allows for a truly generic and scalable graceful shutdown of all timed tasks.
+	 */
+	initializeGlobalIntervalTracker() {
+		if (!this._activeIntervals) this._activeIntervals = new Set();
 
-        const botInstance = this;
-        const originalSetInterval = global.setInterval;
-        const originalClearInterval = global.clearInterval;
+		const botInstance = this;
+		const originalSetInterval = global.setInterval;
+		const originalClearInterval = global.clearInterval;
 
-        global.setInterval = function (...args) {
-            const intervalId = originalSetInterval.apply(this, args);
+		global.setInterval = function (...args) {
+			const intervalId = originalSetInterval.apply(this, args);
 
-            botInstance._activeIntervals.add(intervalId);
-            return intervalId;
-        };
+			botInstance._activeIntervals.add(intervalId);
+			return intervalId;
+		};
 
-        global.clearInterval = function (intervalId) {
-            originalClearInterval.apply(this, [intervalId]);
+		global.clearInterval = function (intervalId) {
+			originalClearInterval.apply(this, [intervalId]);
 
-            botInstance._activeIntervals.delete(intervalId);
-        };
+			botInstance._activeIntervals.delete(intervalId);
+		};
 
-        this.logger.info('✅ Global setInterval/clearInterval has been patched for tracking.');
-    }
+		this.logger.info(
+			'✅ Global setInterval/clearInterval has been patched for tracking.',
+		);
+	}
 
-    /**
-     * 🛑 [FINAL ARCHITECTURE v5] Manages ALL graceful shutdown procedures.
-     * This version patches the core message sending/editing methods to automatically
-     * track ANY message with components, regardless of how its interactions are handled.
-     */
-    initializeShutdownCollectors() {
-        if (!this._messagesWithActiveCollectors) this._messagesWithActiveCollectors = new Set();
+	disableRecursively(components) {
+		return components.map((comp) => {
+			if (comp.components && Array.isArray(comp.components)) {
+				comp.components = disableRecursively(comp.components);
+			}
 
-        if (!this._collectorPatched) {
-            const origCreateCollector = require('discord.js').Message.prototype.createMessageComponentCollector;
-            const botInstance = this;
+			if (comp.type === 2 || comp.type === 3 || comp.type >= 5) {
+				return { ...comp, disabled: true };
+			}
+			return comp;
+		});
+	}
 
-            require('discord.js').Message.prototype.createMessageComponentCollector = function (...args) {
-                const collector = origCreateCollector.apply(this, args);
-                const message = this;
+	/**
+	 * 🛑 [FINAL ARCHITECTURE v5] Manages ALL graceful shutdown procedures.
+	 * This version patches the core message sending/editing methods to automatically
+	 * track ANY message with components, regardless of how its interactions are handled.
+	 */
+	initializeShutdownCollectors() {
+		if (!this._messagesWithActiveCollectors)
+			this._messagesWithActiveCollectors = new Set();
 
-                if (botInstance._messagesWithActiveCollectors) {
-                    botInstance._messagesWithActiveCollectors.add(message);
-                }
+		if (!this._collectorPatched) {
+			const origCreateCollector =
+				require('discord.js').Message.prototype.createMessageComponentCollector;
+			const botInstance = this;
 
-                collector.once('end', () => {
-                    if (botInstance._messagesWithActiveCollectors) {
-                        botInstance._messagesWithActiveCollectors.delete(message);
-                    }
-                });
+			require('discord.js').Message.prototype.createMessageComponentCollector =
+				function (...args) {
+					const collector = origCreateCollector.apply(this, args);
 
-                return collector;
-            };
-            this._collectorPatched = true;
-            this.logger.info('✅ Corrected collector-based component tracking has been patched.');
-        }
+					if (botInstance._messagesWithActiveCollectors) {
+						botInstance._messagesWithActiveCollectors.add(this);
+					}
 
-        if (!this._cleanupAttached) {
-            const cleanupAndFlush = async (callback) => {
-                this.logger.info('🛑 Graceful shutdown initiated...');
+					collector.once('end', () => {
+						if (botInstance._messagesWithActiveCollectors) {
+							botInstance._messagesWithActiveCollectors.delete(this);
+						}
+					});
 
-                if (this._activeIntervals && this._activeIntervals.size > 0) {
-                    this.logger.info(`🛑 Halting ${this._activeIntervals.size} active global intervals...`);
-                    for (const intervalId of this._activeIntervals) {
-                        clearInterval(intervalId);
-                    }
-                }
+					return collector;
+				};
+			this._collectorPatched = true;
+			this.logger.info(
+				'✅ Corrected collector-based component tracking has been patched.',
+			);
+		}
 
-                const messagesToProcess = this._messagesWithActiveCollectors;
+		if (!this._cleanupAttached) {
+			const cleanupAndFlush = async (callback) => {
+				this.logger.info('🛑 Graceful shutdown initiated...');
 
-                if (messagesToProcess && messagesToProcess.size > 0) {
-                    this.logger.info(`🛑 Disabling components on up to ${messagesToProcess.size} messages.`);
-                    const editPromises = [];
+				if (this._activeIntervals && this._activeIntervals.size > 0) {
+					this.logger.info(
+						`🛑 Halting ${this._activeIntervals.size} active global intervals...`,
+					);
+					for (const intervalId of this._activeIntervals) {
+						clearInterval(intervalId);
+					}
+				}
 
-                    function disableRecursively(components) {
-                        return components.map((comp) => {
-                            if (comp.components && Array.isArray(comp.components)) {
-                                comp.components = disableRecursively(comp.components);
-                            }
+				const messagesToProcess = this._messagesWithActiveCollectors;
 
-                            if (comp.type === 2 || comp.type === 3 || comp.type >= 5) {
-                                return { ...comp, disabled: true };
-                            }
-                            return comp;
-                        });
-                    }
+				if (messagesToProcess && messagesToProcess.size > 0) {
+					this.logger.info(
+						`🛑 Disabling components on up to ${messagesToProcess.size} messages.`,
+					);
+					const editPromises = [];
 
-                    for (const msg of messagesToProcess) {
-                        if (!msg.editable || !msg.components || msg.components.length === 0) continue;
-                        try {
-                            const rawComponents = msg.components.map((c) => c.toJSON());
-                            const disabledComponents = disableRecursively(rawComponents);
-                            editPromises.push(msg.edit({ components: disabledComponents }).catch(() => {}));
-                        } catch (e) {}
-                    }
-                    await Promise.allSettled(editPromises);
-                }
-                this.logger.info('✅ Component cleanup complete.');
+					for (const msg of messagesToProcess) {
+						if (!msg.editable || !msg.components || msg.components.length === 0)
+							continue;
+						try {
+							const rawComponents = msg.components.map((c) => c.toJSON());
+							const disabledComponents = disableRecursively(rawComponents);
+							editPromises.push(
+								msg.edit({ components: disabledComponents }).catch(() => {}),
+							);
+						} catch (error) {
+							this.logger.error(error);
+						}
+					}
+					await Promise.allSettled(editPromises);
+				}
+				this.logger.info('✅ Component cleanup complete.');
 
-                this.logger.info('🚰 Flushing remaining logs...');
-                this.logger.on('finish', () => {
-                    console.log('⏳ Logger has flushed. Kythia is now safely shutting down.');
-                    if (callback) callback();
-                });
-                this.logger.end();
-                setTimeout(() => {
-                    console.log('⏳ Logger flush timeout. Forcing exit.');
-                    if (callback) callback();
-                }, 4000);
-            };
+				this.logger.info('🚰 Flushing remaining logs...');
+				this.logger.on('finish', () => {
+					console.log(
+						'⏳ Logger has flushed. Kythia is now safely shutting down.',
+					);
+					if (callback) callback();
+				});
+				this.logger.end();
+				setTimeout(() => {
+					console.log('⏳ Logger flush timeout. Forcing exit.');
+					if (callback) callback();
+				}, 4000);
+			};
 
-            exitHook(cleanupAndFlush);
-            process.on('unhandledRejection', (error) => {
-                this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
-            });
-            process.on('uncaughtException', (error) => {
-                this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
-                process.exit(1);
-            });
+			exitHook(cleanupAndFlush);
+			process.on('unhandledRejection', (error) => {
+				this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
+			});
+			process.on('uncaughtException', (error) => {
+				this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
+				process.exit(1);
+			});
 
-            this._cleanupAttached = true;
-            this.logger.info('🛡️  Graceful shutdown and error handlers are now active.');
-        }
-    }
+			this._cleanupAttached = true;
+			this.logger.info(
+				'🛡️  Graceful shutdown and error handlers are now active.',
+			);
+		}
+	}
 
-    /**
-     * Initialize all shutdown procedures
-     */
-    initialize() {
-        this.initializeGlobalIntervalTracker();
-        this.initializeShutdownCollectors();
-    }
+	/**
+	 * Initialize all shutdown procedures
+	 */
+	initialize() {
+		this.initializeGlobalIntervalTracker();
+		this.initializeShutdownCollectors();
+	}
 
-    /**
-     * Get active intervals count
-     * @returns {number} Number of active intervals
-     */
-    getActiveIntervalsCount() {
-        return this._activeIntervals ? this._activeIntervals.size : 0;
-    }
+	/**
+	 * Get active intervals count
+	 * @returns {number} Number of active intervals
+	 */
+	getActiveIntervalsCount() {
+		return this._activeIntervals ? this._activeIntervals.size : 0;
+	}
 
-    /**
-     * Get messages with active collectors count
-     * @returns {number} Number of messages with active collectors
-     */
-    getActiveCollectorsCount() {
-        return this._messagesWithActiveCollectors ? this._messagesWithActiveCollectors.size : 0;
-    }
+	/**
+	 * Get messages with active collectors count
+	 * @returns {number} Number of messages with active collectors
+	 */
+	getActiveCollectorsCount() {
+		return this._messagesWithActiveCollectors
+			? this._messagesWithActiveCollectors.size
+			: 0;
+	}
 
-    /**
-     * Force cleanup (for testing purposes)
-     */
-    forceCleanup() {
-        if (this._activeIntervals) {
-            for (const intervalId of this._activeIntervals) {
-                clearInterval(intervalId);
-            }
-            this._activeIntervals.clear();
-        }
-    }
+	/**
+	 * Force cleanup (for testing purposes)
+	 */
+	forceCleanup() {
+		if (this._activeIntervals) {
+			for (const intervalId of this._activeIntervals) {
+				clearInterval(intervalId);
+			}
+			this._activeIntervals.clear();
+		}
+	}
 }
 
 module.exports = ShutdownManager;

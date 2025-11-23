@@ -1,4 +1,4 @@
 module.exports = {
-    color: require('./color.js'),
-    formatter: require('./formatter.js'),
+	color: require('./color.js'),
+	formatter: require('./formatter.js'),
 };

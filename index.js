@@ -10,8 +10,6 @@ module.exports.KythiaModel = require('./src/database/KythiaModel.js');
 
 module.exports.createSequelizeInstance = require('./src/database/KythiaSequelize.js');
 
-module.exports.KythiaORM = require('./src/database/KythiaORM.js');
-
 module.exports.utils = require('./src/utils/index.js');
 
-module.exports.BaseCommand = require('./src/structures/BaseCommand.js')
+module.exports.BaseCommand = require('./src/structures/BaseCommand.js');
