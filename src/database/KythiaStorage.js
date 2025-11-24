@@ -4,7 +4,7 @@
  * @file src/database/KythiaStorage.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.10.0-beta
+ * @version 0.11.0-beta
  *
  * @description
  * Custom storage adapter for Umzug that mimics Laravel's migration table structure.

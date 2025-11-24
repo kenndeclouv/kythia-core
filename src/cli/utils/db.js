@@ -1,12 +1,31 @@
+/**
+ * 🔌 CLI Database & Migration Bootstrapper
+ *
+ * @file src/cli/utils/db.js
+ * @copyright © 2025 kenndeclouv
+ * @assistant chaa & graa
+ * @version 0.11.0-beta
+ *
+ * @description
+ * Initializes the database connection and migration engine (Umzug) specifically
+ * for CLI operations. It dynamically loads the project configuration and
+ * discovers migration files across all addons.
+ *
+ * ✨ Core Features:
+ * -  Dynamic Config: Loads `kythia.config.js` from the user's project root.
+ * -  Auto-Discovery: Scans `addons` directory for migration files.
+ * -  Pretty Logging: Custom console output using `picocolors` for migration status.
+ * -  Singleton-like: Exports shared instances of Sequelize and Umzug.
+ */
+
 require('@dotenvx/dotenvx/config');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Umzug } = require('umzug');
-const createSequelizeInstance = require('kythia-core/src/database/KythiaSequelize');
+const createSequelizeInstance = require('../../database/KythiaSequelize');
 const KythiaStorage = require('../../database/KythiaStorage');
 const pc = require('picocolors');
 
-// Cari config di root folder project USER, bukan di dalam library
 const configPath = path.resolve(process.cwd(), 'kythia.config.js');
 
 if (!fs.existsSync(configPath)) {
@@ -16,7 +35,6 @@ if (!fs.existsSync(configPath)) {
 
 const config = require(configPath);
 
-// 1. Connect Database
 const logger = {
 	info: () => {},
 	error: console.error,
@@ -25,9 +43,7 @@ const logger = {
 
 const sequelize = createSequelizeInstance(config, logger);
 
-// 2. Helper Cari Migration Files
 function getMigrationFiles() {
-	// PENTING: Gunakan process.cwd() biar dynamic path (future proof buat global lib)
 	const rootDir = process.cwd();
 	const addonsDir = path.join(rootDir, 'addons');
 
@@ -56,7 +72,6 @@ function getMigrationFiles() {
 
 const storage = new KythiaStorage({ sequelize });
 
-// ✨ CUSTOM LOGGER BIAR GANTENG
 const umzugLogger = {
 	info: (event) => {
 		if (typeof event === 'object') {

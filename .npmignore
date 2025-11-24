@@ -1,9 +1,35 @@
-# Development Config
+# --- Development Configs ---
 .prettierrc
 .versionrc.js
 commitlint.config.js
 jsconfig.json
+biome.json
+tsconfig.json
 
-# Git specific
+# --- Git & CI/CD ---
 .gitignore
 .gitattributes
+.github/
+.husky/
+.vscode/
+.idea/
+
+# --- Package Managers & Local Dev ---
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.yalc/
+yalc.lock
+
+# --- Logs & Temporary Files ---
+logs/
+temp/
+coverage/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- System Files ---
+.DS_Store
+Thumbs.db

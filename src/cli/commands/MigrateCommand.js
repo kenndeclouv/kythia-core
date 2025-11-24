@@ -1,11 +1,23 @@
 /**
- * @namespace: src/cli/commands/MigrateCommand.js
- * @type: Command
+ * 🚜 Database Migration Runner
+ *
+ * @file src/cli/commands/MigrateCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.0-beta
+ *
+ * @description
+ * Manages database schema updates using Umzug. Supports standard migration,
+ * fresh resets (nuclear option), and smart batch-based rollbacks.
+ *
+ * ✨ Core Features:
+ * -  Fresh Mode: Wipes database and re-runs migrations from scratch.
+ * -  Smart Rollback: Rolls back only the last batch of migrations.
+ * -  Auto-Create: Detects missing database and offers to create it.
+ * -  Safety Net: Prompts for confirmation on destructive actions.
  */
 
+const Command = require('../Command');
 const { umzug, sequelize, storage } = require('../utils/db');
 const pc = require('picocolors');
 const readline = require('node:readline');
@@ -23,16 +35,24 @@ function promptYN(question) {
 	});
 }
 
-module.exports = {
-	async execute(options) {
+class MigrateCommand extends Command {
+	signature = 'migrate';
+	description = 'Run pending database migrations';
+
+	configure(cmd) {
+		cmd
+			.option('-f, --fresh', 'Wipe database and re-run all migrations')
+			.option('-r, --rollback', 'Rollback the last batch of migrations');
+	}
+
+	async handle(options) {
 		console.log(pc.dim('🔌 Connecting to database...'));
 		let needReauth = false;
 
-		// 1. Cek Koneksi & Create DB logic (Sama kayak kodemu yg lama)
 		try {
 			await sequelize.authenticate();
 		} catch (err) {
-			const dbErrorCodes = ['ER_BAD_DB_ERROR', '3D000']; // mysql & pg
+			const dbErrorCodes = ['ER_BAD_DB_ERROR', '3D000'];
 			if (
 				dbErrorCodes.includes(err.original?.code) ||
 				dbErrorCodes.includes(err.original?.sqlState)
@@ -108,12 +128,7 @@ module.exports = {
 			}
 		}
 
-		// 2. EXECUTE MIGRATION LOGIC
 		try {
-			// ============================================================
-			// 🧨 MODE: FRESH (Reset Total)
-			// ============================================================
-			// --- MODE: FRESH ---
 			if (options.fresh) {
 				console.log(pc.red('🧨 DROPPING ALL TABLES (Fresh)...'));
 
@@ -126,10 +141,8 @@ module.exports = {
 					process.exit(0);
 				}
 
-				// 🔥 NUCLEAR OPTION: Disable Foreign Keys -> Drop All -> Enable Foreign Keys
 				const queryInterface = sequelize.getQueryInterface();
 
-				// 1. Matikan Foreign Key Checks (Biar bisa hapus tabel sembarangan)
 				if (
 					sequelize.getDialect() === 'mysql' ||
 					sequelize.getDialect() === 'mariadb'
@@ -138,13 +151,10 @@ module.exports = {
 				} else if (sequelize.getDialect() === 'sqlite') {
 					await sequelize.query('PRAGMA foreign_keys = OFF', { raw: true });
 				}
-				// (Postgres biasanya pake CASCADE di dropTable, tapi dropAllTables sequelize udah handle lumayan oke)
 
 				try {
-					// 2. Drop Semua Tabel
 					await queryInterface.dropAllTables();
 
-					// 3. Hapus tabel history migrasi kita juga
 					await queryInterface.dropTable('migrations').catch(() => {});
 					await queryInterface.dropTable('SequelizeMeta').catch(() => {});
 
@@ -153,7 +163,6 @@ module.exports = {
 					console.error(pc.red(`❌ Failed to drop tables: ${e.message}`));
 					throw e;
 				} finally {
-					// 4. Hidupkan lagi Foreign Key Checks (PENTING!)
 					if (
 						sequelize.getDialect() === 'mysql' ||
 						sequelize.getDialect() === 'mariadb'
@@ -166,7 +175,6 @@ module.exports = {
 
 				console.log(pc.dim('   -> Re-running all migrations...'));
 
-				// Reset batch di storage
 				if (storage && typeof storage.setBatch === 'function') {
 					storage.setBatch(1);
 				}
@@ -181,11 +189,7 @@ module.exports = {
 				return;
 			}
 
-			// ============================================================
-			// ⏪ MODE: ROLLBACK (Smart Batching)
-			// ============================================================
 			if (options.rollback) {
-				// 1. Cari nomor batch terakhir di DB
 				const lastBatchNum = await storage.getLastBatchNumber();
 
 				if (lastBatchNum === 0) {
@@ -193,7 +197,6 @@ module.exports = {
 					return;
 				}
 
-				// 2. Ambil semua file yang ada di batch tersebut
 				const filesInBatch = await storage.getLastBatchMigrations();
 
 				console.log(
@@ -203,12 +206,10 @@ module.exports = {
 				);
 
 				if (filesInBatch.length > 0) {
-					// 3. Suruh Umzug rollback KHUSUS file-file tersebut
 					const rolledBack = await umzug.down({
-						migrations: filesInBatch, // 👈 INI KUNCINYA
+						migrations: filesInBatch,
 					});
 
-					// Logging handled by umzugLogger in db.js usually, but summary here:
 					if (rolledBack.length === 0)
 						console.log(
 							pc.red('❌ Rollback logic executed but no files processed.'),
@@ -227,39 +228,32 @@ module.exports = {
 				return;
 			}
 
-			// ============================================================
-			// 🚜 MODE: MIGRATE (Default)
-			// ============================================================
-
-			// 1. Cek dulu ada yang pending gak?
 			const pending = await umzug.pending();
 			if (pending.length === 0) {
 				console.log(pc.gray('✨ Nothing to migrate. Database is up to date.'));
 				return;
 			}
 
-			// 2. Kalkulasi Batch Baru (Last Batch + 1)
-			// Ini biar nanti pas rollback, mereka dianggap satu paket
 			const lastBatch = await storage.getLastBatchNumber();
 			const newBatch = lastBatch + 1;
 
-			storage.setBatch(newBatch); // Inject ke storage adapter
+			storage.setBatch(newBatch);
 
 			console.log(pc.cyan(`🚜 Running migrations (Batch #${newBatch})...`));
 
-			// 3. Eksekusi
 			const executed = await umzug.up();
 
-			// Logging detail sudah di-handle umzugLogger di db.js
 			console.log(
 				pc.green(`✅ Batch #${newBatch} completed (${executed.length} files).`),
 			);
 		} catch (err) {
 			console.error(pc.bgRed(' ERROR '), pc.red(err.message));
-			// console.error(pc.dim(err.stack));
+
 			process.exit(1);
 		} finally {
 			await sequelize.close();
 		}
-	},
-};
+	}
+}
+
+module.exports = MigrateCommand;

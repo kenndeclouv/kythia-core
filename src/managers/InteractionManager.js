@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.10.0-beta
+ * @version 0.11.0-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -763,7 +763,7 @@ class InteractionManager {
 							.setLabel(
 								await this.t(interaction, 'common.error.button.contact.owner'),
 							)
-							.setURL(`discord://-/users/${ownerFirstId}`),
+							.setURL(`https://discord.com/users/${ownerFirstId}`),
 					),
 				),
 		];

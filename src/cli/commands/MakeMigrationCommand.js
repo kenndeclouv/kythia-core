@@ -1,18 +1,31 @@
 /**
- * @namespace: src/cli/commands/MakeMigrationCommand.js
- * @type: Command
+ * 📐 Migration File Generator
+ *
+ * @file src/cli/commands/MakeMigrationCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.0-beta
+ *
+ * @description
+ * Scaffolds a new database migration file with a precise YYYYMMDD_HHMMSS timestamp prefix.
+ * Places the file in the specified addon's migration directory.
+ *
+ * ✨ Core Features:
+ * -  Timestamped Ordering: Ensures migrations run in creation order.
+ * -  Addon Aware: Targets the correct module folder automatically.
+ * -  Template Injection: Provides standard up/down methods via `queryInterface`.
  */
 
+const Command = require('../Command');
 const fs = require('node:fs');
 const path = require('node:path');
 const pc = require('picocolors');
 
-module.exports = {
-	execute(options) {
-		const { name, addon } = options;
+class MakeMigrationCommand extends Command {
+	signature = 'make:migration <name> <addon>';
+	description = 'Create a new migration file for an addon';
+
+	async handle(_options, name, addon) {
 		const rootDir = process.cwd();
 		const targetDir = path.join(
 			rootDir,
@@ -63,5 +76,7 @@ module.exports = {
 
 		console.log(pc.green('✅ Created migration:'));
 		console.log(pc.dim(`   addons/${addon}/database/migrations/${fileName}`));
-	},
-};
+	}
+}
+
+module.exports = MakeMigrationCommand;

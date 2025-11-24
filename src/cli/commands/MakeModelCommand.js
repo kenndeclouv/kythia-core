@@ -1,28 +1,40 @@
 /**
- * @namespace: src/cli/commands/MakeModelCommand.js
- * @type: Command
+ * 📦 Model Scaffolding Tool
+ *
+ * @file src/cli/commands/MakeModelCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.0-beta
+ *
+ * @description
+ * Generates new Sequelize model files extending `KythiaModel`.
+ * Automatically creates the directory structure and populates standard boilerplate.
+ *
+ * ✨ Core Features:
+ * -  Smart Scaffolding: Creates models in `addons/{addon}/database/models`.
+ * -  Duplicate Protection: Prevents overwriting existing models.
+ * -  Standard Boilerplate: Includes `guarded` and `structure` properties by default.
  */
 
+const Command = require('../Command');
 const fs = require('node:fs');
 const path = require('node:path');
 const pc = require('picocolors');
 
-module.exports = {
-	execute(options) {
-		const { name, addon } = options;
+class MakeModelCommand extends Command {
+	signature = 'make:model <name> <addon>';
+	description = 'Create a new KythiaModel file';
+
+	async handle(_options, name, addon) {
+		//
 		const rootDir = process.cwd();
 		const targetDir = path.join(rootDir, 'addons', addon, 'database', 'models');
 
-		// Cek Addon Exists
 		if (!fs.existsSync(path.join(rootDir, 'addons', addon))) {
 			console.error(pc.red(`❌ Addon '${addon}' not found!`));
 			process.exit(1);
 		}
 
-		// Bikin folder models kalau belum ada
 		if (!fs.existsSync(targetDir)) {
 			fs.mkdirSync(targetDir, { recursive: true });
 		}
@@ -30,7 +42,6 @@ module.exports = {
 		const fileName = `${name}.js`;
 		const filePath = path.join(targetDir, fileName);
 
-		// Cek duplicate
 		if (fs.existsSync(filePath)) {
 			console.error(
 				pc.red(`❌ Model '${fileName}' already exists in ${addon}!`),
@@ -38,7 +49,6 @@ module.exports = {
 			process.exit(1);
 		}
 
-		// Template Standar KythiaModel
 		const template = `/**
  * @namespace: addons/${addon}/database/models/${fileName}
  * @type: Database Model
@@ -47,7 +57,6 @@ module.exports = {
  * @version 0.9.12-beta
  */
 
-const { DataTypes } = require("sequelize");
 const { KythiaModel } = require("kythia-core");
 
 class ${name} extends KythiaModel {
@@ -66,5 +75,7 @@ module.exports = ${name};`;
 
 		console.log(pc.green('✅ Created Model:'));
 		console.log(pc.dim(`   addons/${addon}/database/models/${fileName}`));
-	},
-};
+	}
+}
+
+module.exports = MakeModelCommand;

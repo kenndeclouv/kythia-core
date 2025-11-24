@@ -305,6 +305,92 @@ The core abandons traditional `sync()` operations in favor of a robust, **Larave
 
 -----
 
+## �️ CLI Tools & Commands
+
+Kythia Core comes with a powerful CLI to streamline development, database management, and localization tasks.
+
+Run `npx kythia --help` to see all available commands.
+
+### Database Management
+
+#### `migrate`
+Run pending database migrations.
+```bash
+npx kythia migrate
+```
+**Options:**
+*   `-f, --fresh`: **[DANGER]** Wipe the entire database (drop all tables) and re-run all migrations from scratch.
+*   `-r, --rollback`: Rollback the last *batch* of migrations.
+
+#### `make:migration`
+Create a new timestamped migration file in an addon.
+```bash
+npx kythia make:migration --name create_users_table --addon core
+```
+**Options:**
+*   `--name <string>`: Name of the migration (snake_case recommended).
+*   `--addon <string>`: Target addon name (must exist in `addons/`).
+
+#### `make:model`
+Scaffold a new Sequelize model file in an addon.
+```bash
+npx kythia make:model --name User --addon core
+```
+**Options:**
+*   `--name <string>`: Name of the model (PascalCase recommended).
+*   `--addon <string>`: Target addon name.
+
+#### `cache:clear`
+Flush Redis cache. Supports multi-instance selection if `REDIS_URLS` is configured.
+```bash
+npx kythia cache:clear
+```
+
+### Localization (i18n)
+
+#### `lang:check`
+Lint translation key usage in your code against your language files.
+```bash
+npx kythia lang:check
+```
+*   **Static Analysis:** Uses AST parsing to find `t('key')` calls.
+*   **Validation:** Reports missing keys in JSON files.
+*   **Unused Keys:** Reports keys defined in `en.json` but never used in code.
+
+#### `lang:translate`
+Auto-translate your `en.json` to a target language using Google Gemini AI.
+```bash
+npx kythia lang:translate --target ja
+```
+**Options:**
+*   `--target <lang>`: Target language code (default: `ja`).
+*   **Requires:** `GEMINI_API_KEYS` in `.env`.
+
+### Development Utilities
+
+#### `dev:namespace`
+Automatically add or update JSDoc `@namespace` headers in all project files.
+```bash
+npx kythia dev:namespace
+```
+Useful for maintaining consistent file documentation and ownership headers.
+
+#### `gen:structure`
+Generate a markdown tree representation of your project structure.
+```bash
+npx kythia gen:structure
+```
+Outputs to `temp/structure.md`. Great for documentation or sharing context with AI.
+
+#### `version:up`
+Synchronize JSDoc `@version` tags across the project with `package.json`.
+```bash
+npx kythia version:up
+```
+Run this after bumping your package version to keep file headers in sync.
+
+-----
+
 ## 🔗 Peer Dependencies
 
   * **`discord.js`:** This is a `peerDependency`. `kythia-core` requires `discord.js` to function, but it expects the *consuming application* (your main bot) to provide it by listing `discord.js` in its own `dependencies`. This prevents version conflicts and issues with `instanceof` checks, especially common when using `npm link` during development. Ensure your main bot project has `discord.js` installed.
@@ -313,4 +399,4 @@ The core abandons traditional `sync()` operations in favor of a robust, **Larave
 
 ## 📜 License
 
-This project is licensed under the CC BY NC 4.0 License - see the [LICENSE](https://www.google.com/search?q=./LICENSE) file for details.
+This project is licensed under the CC BY NC 4.0 License - see the [LICENSE](./LICENSE) file for details.

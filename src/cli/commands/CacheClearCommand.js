@@ -1,17 +1,27 @@
 /**
- * @namespace: src/cli/commands/CacheClearCommand.js
- * @type: Command
+ * 🧹 Redis Cache Flusher
+ *
+ * @file src/cli/commands/CacheClearCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.0-beta
+ *
+ * @description
+ * Interactive utility to flush Redis cache. Supports intelligent handling of
+ * multiple Redis instances defined in environment variables.
+ *
+ * ✨ Core Features:
+ * -  Multi-Target: Detects and lists all Redis URLs from config.
+ * -  Safety First: Requires explicit confirmation before flushing.
+ * -  Target Selection: Allows flushing specific instances or all at once.
  */
 
+const Command = require('../Command');
 const pc = require('picocolors');
 const readline = require('node:readline');
 const Redis = require('ioredis');
-require('@dotenvx/dotenvx/config'); // Load .env langsung
+require('@dotenvx/dotenvx/config');
 
-// Helper buat input user
 function askQuestion(query) {
 	const rl = readline.createInterface({
 		input: process.stdin,
@@ -25,8 +35,11 @@ function askQuestion(query) {
 	);
 }
 
-module.exports = {
-	async execute(options) {
+class CacheClearCommand extends Command {
+	signature = 'cache:clear';
+	description = 'Flush Redis cache (supports multi-instance selection)';
+
+	async handle() {
 		console.log(pc.dim('🔍 Detecting Redis configuration...'));
 
 		const redisUrlsRaw = process.env.REDIS_URLS;
@@ -36,7 +49,6 @@ module.exports = {
 			process.exit(1);
 		}
 
-		// Parsing comma-separated URLs
 		const urls = redisUrlsRaw
 			.split(',')
 			.map((u) => u.trim())
@@ -49,12 +61,10 @@ module.exports = {
 
 		let targets = [];
 
-		// Kalau cuma 1 URL, langsung sikat (dengan konfirmasi)
 		if (urls.length === 1) {
 			targets = [urls[0]];
 			console.log(pc.cyan(`🎯 Target: ${targets[0]}`));
 		} else {
-			// Kalau Multi URL, tanya user
 			console.log(
 				pc.yellow(`⚠️  Multiple Redis instances detected (${urls.length}):`),
 			);
@@ -63,7 +73,6 @@ module.exports = {
 			);
 			console.log(`0. ${pc.bgRed(pc.white(' FLUSH ALL INSTANCES '))}`);
 			urls.forEach((url, index) => {
-				// Masking password biar aman di console
 				const maskedUrl = url.replace(/:([^@]+)@/, ':****@');
 				console.log(`${index + 1}. ${maskedUrl}`);
 			});
@@ -74,21 +83,20 @@ module.exports = {
 			const answer = await askQuestion(
 				pc.cyan('Select target to flush (number): '),
 			);
-			const choice = parseInt(answer);
+			const choice = parseInt(answer, 10);
 
-			if (isNaN(choice) || choice < 0 || choice > urls.length) {
+			if (Number.isNaN(choice) || choice < 0 || choice > urls.length) {
 				console.error(pc.red('❌ Invalid selection.'));
 				process.exit(1);
 			}
 
 			if (choice === 0) {
-				targets = urls; // Sikat semua
+				targets = urls;
 			} else {
-				targets = [urls[choice - 1]]; // Sikat spesifik
+				targets = [urls[choice - 1]];
 			}
 		}
 
-		// Konfirmasi terakhir (Nuclear Launch Key)
 		const confirm = await askQuestion(
 			pc.bgRed(pc.white(' DANGER ')) +
 				pc.yellow(
@@ -101,7 +109,6 @@ module.exports = {
 			process.exit(0);
 		}
 
-		// Eksekusi Flush
 		console.log('');
 		for (const url of targets) {
 			const masked = url.replace(/:([^@]+)@/, ':****@');
@@ -109,7 +116,7 @@ module.exports = {
 				console.log(pc.dim(`🔌 Connecting to ${masked}...`));
 				const redis = new Redis(url, {
 					maxRetriesPerRequest: 1,
-					retryStrategy: null, // Gak usah retry kalau mati, langsung error aja
+					retryStrategy: null,
 				});
 
 				await redis.flushall();
@@ -123,5 +130,7 @@ module.exports = {
 
 		console.log(pc.green('\n✨ Cache clearing process completed.'));
 		process.exit(0);
-	},
-};
+	}
+}
+
+module.exports = CacheClearCommand;

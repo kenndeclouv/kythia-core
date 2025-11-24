@@ -1,42 +1,69 @@
 #!/usr/bin/env node
 
-const { Command } = require('commander');
-const pc = require('picocolors');
-const { version } = require('../../package.json');
+/**
+ * ⚡ Kythia CLI Entry Point
+ *
+ * @file src/cli/index.js
+ * @copyright © 2025 kenndeclouv
+ * @assistant chaa & graa
+ * @version 0.11.0-beta
+ *
+ * @description
+ * The main bootstrap entry point for the Kythia CLI.
+ * It dynamically scans, loads, and registers all command classes found in the
+ * `commands` directory, orchestrating the `commander` program execution.
+ *
+ * ✨ Core Features:
+ * -  Dynamic Loading: Automatically finds new commands without manual import.
+ * -  Class-Based Architecture: Supports standard `Command` class structure.
+ * -  Error Handling: Gracefully handles malformed commands during boot.
+ */
 
-const MigrateCommand = require('./commands/MigrateCommand');
-const MakeMigrationCommand = require('./commands/MakeMigrationCommand');
+const { version } = require('../../package.json');
+const { Command } = require('commander');
+const BaseCommand = require('./Command');
+const path = require('node:path');
+const pc = require('picocolors');
+const fs = require('node:fs');
 
 const program = new Command();
 
 program
 	.name('kythia')
-	.description(pc.cyan('⚡ Kythia Bot Framework CLI'))
+	.description(pc.cyan('🌸 Kythia Framework CLI'))
 	.version(version);
 
-program
-	.command('migrate')
-	.description('Run pending database migrations')
-	.option('-f, --fresh', 'Wipe database and re-run all migrations')
-	.option('-r, --rollback', 'Rollback the last batch of migrations')
-	.action((options) => MigrateCommand.execute(options));
+const commandsDir = path.join(__dirname, 'commands');
 
-program
-	.command('make:migration')
-	.description('Create a new migration file')
-	.requiredOption('--name <string>', 'Name of the migration')
-	.requiredOption('--addon <string>', 'Target addon name')
-	.action((options) => MakeMigrationCommand.execute(options));
+if (fs.existsSync(commandsDir)) {
+	const commandFiles = fs
+		.readdirSync(commandsDir)
+		.filter((file) => file.endsWith('.js'));
 
-program
-	.command('make:model')
-	.description('Create a new KythiaModel file')
-	.requiredOption('--name <string>', 'Name of the model (PascalCase)')
-	.requiredOption('--addon <string>', 'Target addon name')
-	.action((options) => MakeModelCommand.execute(options));
+	for (const file of commandFiles) {
+		const filePath = path.join(commandsDir, file);
+		try {
+			const CommandClass = require(filePath);
 
-program
-	.command('cache:clear')
-	.description('Flush Redis cache (supports multi-instance selection)')
-	.action((options) => CacheClearCommand.execute(options));
+			if (
+				typeof CommandClass === 'function' &&
+				CommandClass.prototype instanceof BaseCommand
+			) {
+				const commandInstance = new CommandClass();
+				commandInstance.register(program);
+			} else if (typeof CommandClass.register === 'function') {
+				CommandClass.register(program);
+			} else {
+				console.warn(
+					pc.yellow(
+						`⚠️  Skipped ${file}: Not a valid Command class or missing 'register' function.`,
+					),
+				);
+			}
+		} catch (err) {
+			console.error(pc.red(`❌ Failed to load command ${file}:`), err);
+		}
+	}
+}
+
 program.parse(process.argv);

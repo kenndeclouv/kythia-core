@@ -4,7 +4,7 @@
  * @file src/database/KythiaModel.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.10.0-beta
+ * @version 0.11.0-beta
  *
  * @description
  * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
@@ -771,9 +771,6 @@ class KythiaModel extends Model {
 	/**
 	 * 🔴 (Private) Sets a cache entry specifically in Redis, supporting tags for sniper invalidation.
 	 */
-	/**
-	 * 🕵️ DEBUGGER VERSION: _redisSetCacheEntry
-	 */
 	static async _redisSetCacheEntry(cacheKey, data, ttl, tags = []) {
 		try {
 			let plainData = data;
@@ -782,17 +779,6 @@ class KythiaModel extends Model {
 			} else if (Array.isArray(data)) {
 				plainData = data.map((item) =>
 					item && typeof item.toJSON === 'function' ? item.toJSON() : item,
-				);
-			}
-
-			// 🔍 LOG APA YANG MAU DISIMPEN
-			if (plainData === null) {
-				this.logger.warn(
-					`🚨 [DEBUG SET] Data is NULL for ${cacheKey}! Saving NEGATIVE CACHE. (Asal data: ${data ? 'Instance' : 'Null'})`,
-				);
-			} else {
-				this.logger.info(
-					`💾 [DEBUG SET] Saving Valid Data for ${cacheKey}. Keys: ${Object.keys(plainData).join(',')}`,
 				);
 			}
 
@@ -813,44 +799,24 @@ class KythiaModel extends Model {
 		}
 	}
 
-	/**
-	 * 🕵️ DEBUGGER VERSION: _redisGetCachedEntry
-	 */
 	static async _redisGetCachedEntry(cacheKey, includeOptions) {
 		try {
 			const result = await this.redis.get(cacheKey);
-
-			// 🔍 LOG APA YANG DIAMBIL
-			if (result) {
-				this.logger.info(
-					`📥 [DEBUG GET] Raw Result for ${cacheKey}: ${result.substring(0, 50)}...`,
-				);
-			} else {
-				this.logger.info(`📭 [DEBUG GET] MISS (Result null) for ${cacheKey}`);
-			}
 
 			if (result === null || result === undefined)
 				return { hit: false, data: undefined };
 
 			this.cacheStats.redisHits++;
 			if (result === NEGATIVE_CACHE_PLACEHOLDER) {
-				this.logger.warn(
-					`⛔ [DEBUG GET] HIT but NEGATIVE CACHE for ${cacheKey}`,
-				);
 				return { hit: true, data: null };
 			}
 
 			const parsedData = safeParse(result, this.logger);
 
-			// Fix yang tadi, memastikan kalau parse error dianggap miss
 			if (parsedData === null) {
-				this.logger.warn(
-					`⚠️ [CACHE] Corrupt JSON for ${cacheKey}. Treating as miss.`,
-				);
 				return { hit: false, data: undefined };
 			}
 
-			// ... (sisa logic build instance sama kayak sebelumnya) ...
 			const includeAsArray = includeOptions
 				? Array.isArray(includeOptions)
 					? includeOptions
