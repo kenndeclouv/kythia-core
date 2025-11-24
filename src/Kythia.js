@@ -29,7 +29,9 @@ const AddonManager = require('./managers/AddonManager');
 const EventManager = require('./managers/EventManager');
 
 const KythiaMigrator = require('./database/KythiaMigrator');
-const ModelLoader = require('./database/ModelLoader');
+// const ModelLoader = require('./database/ModelLoader');
+const bootModels = require('./database/ModelLoader');
+const KythiaModel = require('./database/KythiaModel');
 
 class Kythia {
 	/**
@@ -380,7 +382,7 @@ class Kythia {
 				clc.cyan('Created by kenndeclouv'),
 				clc.cyan('Discord Support: ') + clc.underline('https://dsc.gg/kythia'),
 				clc.cyan('Official Documentation: ') +
-					clc.underline('https://kythia.my.id/commands'),
+					clc.underline('https://docs.kythia.me'),
 				'',
 				clc.cyanBright(`Kythia version: ${version}`),
 				'',
@@ -482,17 +484,17 @@ class Kythia {
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Connect Database ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
 			await this.sequelize.authenticate();
 
-			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Run Migrations ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
 			await KythiaMigrator({
 				sequelize: this.sequelize,
 				container: this.container,
 				logger: this.logger,
 			});
 
-			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Boot Models ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
-			await ModelLoader(this, this.sequelize);
+			await bootModels(this, this.sequelize);
 
-			this.logger.info('🔄 Hydrating container with initialized models...');
+			this.logger.info('🪝 Attaching Cache Hooks...');
+
+			KythiaModel.attachHooksToAllModels(this.sequelize, this.client);
 
 			const handlers = this.addonManager.getHandlers();
 			this.eventManager = new EventManager({

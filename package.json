@@ -13,6 +13,9 @@
 			"biome check --write --no-errors-on-unmatched"
 		]
 	},
+	"bin": {
+		"kythia": "./src/cli/index.js"
+	},
 	"keywords": [
 		"kythia",
 		"discord",

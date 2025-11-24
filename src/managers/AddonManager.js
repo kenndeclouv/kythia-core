@@ -466,6 +466,7 @@ class AddonManager {
 	async _loadTopLevelCommandGroup(
 		commandsPath,
 		addon,
+		addonPermissionDefaults,
 		commandNamesSet,
 		commandDataForDeployment,
 	) {
@@ -475,6 +476,14 @@ class AddonManager {
 		if (this._isBaseCommandClass(commandDef)) {
 			commandDef = this._instantiateBaseCommand(commandDef);
 		}
+
+		const category = addon.name;
+		const categoryDefaults = addonPermissionDefaults[category] || {};
+
+		commandDef = {
+			...categoryDefaults,
+			...commandDef,
+		};
 
 		const mainBuilder = this._createBuilderFromData(
 			commandDef.data,
