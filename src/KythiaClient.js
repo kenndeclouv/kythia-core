@@ -49,7 +49,6 @@ module.exports = function kythiaClient() {
 
 			ThreadManager: {
 				maxSize: 25,
-				keepOverLimit: (thread) => thread.isActive(),
 			},
 
 			GuildMemberManager: {
