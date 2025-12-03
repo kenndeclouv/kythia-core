@@ -1,6 +1,6 @@
 {
 	"name": "kythia-core",
-	"version": "0.11.0-beta",
+	"version": "0.11.1-beta",
 	"description": "Core library for the Kythia main Discord bot: extensible, modular, and scalable foundation for commands, components, and event management.",
 	"main": "index.js",
 	"scripts": {

@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.0-beta
+ * @version 0.11.1-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -56,6 +56,10 @@ class InteractionManager {
 		this.KythiaVoter = this.models.KythiaVoter;
 		this.isTeam = this.helpers.discord.isTeam;
 		this.isOwner = this.helpers.discord.isOwner;
+
+		if (!this.client.restartNoticeCooldowns) {
+			this.client.restartNoticeCooldowns = new Collection();
+		}
 	}
 
 	/**
@@ -305,6 +309,8 @@ class InteractionManager {
 			} else {
 				await command.execute(interaction);
 			}
+
+			await this._checkRestartSchedule(interaction);
 		} else {
 			this.logger.error(
 				"Command doesn't have a valid 'execute' function:",
@@ -637,6 +643,9 @@ class InteractionManager {
 		if (this.container && !this.container.logger) {
 			this.container.logger = this.logger;
 		}
+
+		await this._checkRestartSchedule(interaction);
+
 		await command.execute(interaction, this.container);
 	}
 
@@ -703,6 +712,51 @@ class InteractionManager {
 				.setTimestamp();
 
 			await logChannel.send({ embeds: [embed] });
+		}
+	}
+
+	/**
+	 * Check for scheduled restart and notify user
+	 * @private
+	 */
+	async _checkRestartSchedule(interaction) {
+		const restartTs = this.client.kythiaRestartTimestamp;
+
+		if (!restartTs || interaction.commandName === 'restart') return;
+
+		const userId = interaction.user.id;
+		const cooldowns = this.client.restartNoticeCooldowns;
+		const now = Date.now();
+		const cooldownTime = 5 * 60 * 1000;
+
+		if (cooldowns.has(userId)) {
+			const lastNotified = cooldowns.get(userId);
+			if (now - lastNotified < cooldownTime) {
+				return;
+			}
+		}
+
+		const timeLeft = restartTs - now;
+
+		if (timeLeft > 0) {
+			try {
+				const timeString = `<t:${Math.floor(restartTs / 1000)}:R>`;
+				// TODO: Add translation
+				const msg = `## ⚠️ System Notice\nKythia is scheduled to restart **${timeString}**.`;
+
+				if (interaction.replied || interaction.deferred) {
+					await interaction.followUp({
+						content: msg,
+						flags: MessageFlags.Ephemeral,
+					});
+
+					cooldowns.set(userId, now);
+
+					setTimeout(() => cooldowns.delete(userId), cooldownTime);
+				}
+			} catch (err) {
+				this.logger.error(err);
+			}
 		}
 	}
 

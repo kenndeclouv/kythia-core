@@ -4,7 +4,7 @@
  * @file src/database/KythiaModel.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.0-beta
+ * @version 0.11.1-beta
  *
  * @description
  * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
@@ -659,10 +659,6 @@ class KythiaModel extends Model {
 	 * @param {string|Object} queryIdentifier - A unique string or a Sequelize query object.
 	 * @returns {string} The final cache key, prefixed with the model's name (e.g., "User:{\"id\":1}").
 	 */
-	/**
-	 * 🔑 Generates a consistent, model-specific cache key from a query identifier.
-	 * FIXED: Handle BigInt in json-stable-stringify
-	 */
 	static getCacheKey(queryIdentifier) {
 		let dataToHash = queryIdentifier;
 
@@ -676,7 +672,7 @@ class KythiaModel extends Model {
 		}
 
 		const opts = {
-			replacer: (value) =>
+			replacer: (_key, value) =>
 				typeof value === 'bigint' ? value.toString() : value,
 		};
 
@@ -710,6 +706,38 @@ class KythiaModel extends Model {
 			normalized[key] = this.normalizeQueryOptions(data[symbol]);
 		});
 		return normalized;
+	}
+
+	/**
+	 * 🧠 Generate tags based on PK and static cacheKeys definition.
+	 * Used for smart invalidation (e.g. invalidate all items belonging to a userId).
+	 */
+	static _generateSmartTags(instance) {
+		if (!instance) return [`${this.name}`];
+
+		const tags = [`${this.name}`];
+
+		const pk = this.primaryKeyAttribute;
+		if (instance[pk]) {
+			tags.push(`${this.name}:${pk}:${instance[pk]}`);
+		}
+
+		const smartKeys = this.cacheKeys || this.CACHE_KEYS || [];
+
+		if (Array.isArray(smartKeys)) {
+			for (const keyGroup of smartKeys) {
+				const keys = Array.isArray(keyGroup) ? keyGroup : [keyGroup];
+				const hasAllValues = keys.every(
+					(k) => instance[k] !== undefined && instance[k] !== null,
+				);
+
+				if (hasAllValues) {
+					const tagParts = keys.map((k) => `${k}:${instance[k]}`).join(':');
+					tags.push(`${this.name}:${tagParts}`);
+				}
+			}
+		}
+		return tags;
 	}
 
 	/**
@@ -774,6 +802,7 @@ class KythiaModel extends Model {
 	static async _redisSetCacheEntry(cacheKey, data, ttl, tags = []) {
 		try {
 			let plainData = data;
+
 			if (data && typeof data.toJSON === 'function') {
 				plainData = data.toJSON();
 			} else if (Array.isArray(data)) {
@@ -789,6 +818,7 @@ class KythiaModel extends Model {
 
 			const multi = this.redis.multi();
 			multi.set(cacheKey, valueToStore, 'PX', ttl);
+
 			for (const tag of tags) {
 				multi.sadd(tag, cacheKey);
 			}
@@ -821,19 +851,21 @@ class KythiaModel extends Model {
 				? Array.isArray(includeOptions)
 					? includeOptions
 					: [includeOptions]
-				: null;
+				: undefined;
+
+			const buildInstance = (data) => {
+				const instance = this.build(data, {
+					isNewRecord: false,
+					include: includeAsArray,
+				});
+				return instance;
+			};
 
 			if (Array.isArray(parsedData)) {
-				const instances = this.bulkBuild(parsedData, {
-					isNewRecord: false,
-					include: includeAsArray,
-				});
+				const instances = parsedData.map((d) => buildInstance(d));
 				return { hit: true, data: instances };
 			} else {
-				const instance = this.build(parsedData, {
-					isNewRecord: false,
-					include: includeAsArray,
-				});
+				const instance = buildInstance(parsedData);
 				return { hit: true, data: instance };
 			}
 		} catch (err) {
@@ -1055,14 +1087,6 @@ class KythiaModel extends Model {
 	static async getCache(keys, options = {}) {
 		const { noCache, customCacheKey, ttl, ...explicitQueryOptions } = options;
 
-		if (noCache) {
-			const queryToRun = {
-				...this._normalizeFindOptions(keys),
-				...explicitQueryOptions,
-			};
-			return this.findOne(queryToRun);
-		}
-
 		if (Array.isArray(keys)) {
 			const pk = this.primaryKeyAttribute;
 			return this.findAll({ where: { [pk]: keys.map((m) => m[pk]) } });
@@ -1074,10 +1098,14 @@ class KythiaModel extends Model {
 			...normalizedKeys,
 			...explicitQueryOptions,
 			where: {
-				...normalizedKeys.where,
+				...(normalizedKeys.where || {}),
 				...(explicitQueryOptions.where || {}),
 			},
 		};
+
+		if (noCache) {
+			return this.findOne(finalQuery);
+		}
 
 		if (!finalQuery.where || Object.keys(finalQuery.where).length === 0) {
 			return null;
@@ -1094,7 +1122,7 @@ class KythiaModel extends Model {
 			return this.pendingQueries.get(cacheKey);
 
 		const queryPromise = this.findOne(finalQuery)
-			.then((record) => {
+			.then(async (record) => {
 				if (this.isRedisConnected || !this.isShardMode) {
 					const tags = [`${this.name}`];
 					if (record)
@@ -1104,7 +1132,7 @@ class KythiaModel extends Model {
 							}`,
 						);
 
-					this.setCacheEntry(cacheKey, record, ttl, tags);
+					await this.setCacheEntry(cacheKey, record, ttl, tags);
 				}
 				return record;
 			})
@@ -1142,12 +1170,12 @@ class KythiaModel extends Model {
 			return this.pendingQueries.get(cacheKey);
 
 		const queryPromise = this.findAll(normalizedOptions)
-			.then((records) => {
+			.then(async (records) => {
 				if (this.isRedisConnected || !this.isShardMode) {
 					const tags = [`${this.name}`];
 					if (Array.isArray(cacheTags)) tags.push(...cacheTags);
 
-					this.setCacheEntry(cacheKey, records, ttl, tags);
+					await this.setCacheEntry(cacheKey, records, ttl, tags);
 				}
 				return records;
 			})
@@ -1340,29 +1368,40 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * 📦 An instance method that saves the current model instance to the database and then
-	 * intelligently updates its corresponding entry in the active cache.
+	 * 📦 FIXED: Save data to DB, then INVALIDATE the cache tags.
+	 * Don't try to setCache here, because .save() result doesn't have associations/includes.
+	 * Let the next getCache() fetch the full fresh data tree.
 	 */
 	async saveAndUpdateCache() {
 		const savedInstance = await this.save();
 		const pk = this.constructor.primaryKeyAttribute;
 		const pkValue = this[pk];
+
 		if (
 			pkValue &&
 			(this.constructor.isRedisConnected || !this.constructor.isShardMode)
 		) {
-			const cacheKey = this.constructor.getCacheKey({ [pk]: pkValue });
+			const cacheKey = this.constructor.getCacheKey({
+				where: { [pk]: pkValue },
+			});
+
 			const tags = [
 				`${this.constructor.name}`,
 				`${this.constructor.name}:${pk}:${pkValue}`,
 			];
+
 			await this.constructor.setCacheEntry(
 				cacheKey,
 				savedInstance,
 				undefined,
 				tags,
 			);
+
+			this.constructor.logger.info(
+				`🔄 [CACHE] Updated cache for ${this.constructor.name}:${pk}:${pkValue}`,
+			);
 		}
+
 		return savedInstance;
 	}
 
@@ -1413,16 +1452,11 @@ class KythiaModel extends Model {
 			return;
 		}
 
-		/**
-		 * Logika setelah data disimpan (Create atau Update)
-		 */
 		const afterSaveLogic = async (instance) => {
 			const modelClass = instance.constructor;
 
 			if (modelClass.isRedisConnected) {
-				const tagsToInvalidate = [`${modelClass.name}`];
-				const pk = modelClass.primaryKeyAttribute;
-				tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
+				const tagsToInvalidate = modelClass._generateSmartTags(instance);
 
 				if (Array.isArray(modelClass.customInvalidationTags)) {
 					tagsToInvalidate.push(...modelClass.customInvalidationTags);
@@ -1433,16 +1467,11 @@ class KythiaModel extends Model {
 			}
 		};
 
-		/**
-		 * Logika setelah data dihapus
-		 */
 		const afterDestroyLogic = async (instance) => {
 			const modelClass = instance.constructor;
 
 			if (modelClass.isRedisConnected) {
-				const tagsToInvalidate = [`${modelClass.name}`];
-				const pk = modelClass.primaryKeyAttribute;
-				tagsToInvalidate.push(`${modelClass.name}:${pk}:${instance[pk]}`);
+				const tagsToInvalidate = modelClass._generateSmartTags(instance);
 
 				if (Array.isArray(modelClass.customInvalidationTags)) {
 					tagsToInvalidate.push(...modelClass.customInvalidationTags);

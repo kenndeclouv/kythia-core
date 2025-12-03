@@ -4,7 +4,7 @@
  * @file src/cli/utils/db.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.0-beta
+ * @version 0.11.1-beta
  *
  * @description
  * Initializes the database connection and migration engine (Umzug) specifically

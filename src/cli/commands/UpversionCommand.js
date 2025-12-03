@@ -4,7 +4,7 @@
  * @file src/cli/commands/UpversionCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.0-beta
+ * @version 0.11.1-beta
  *
  * @description
  * Synchronizes the `@version` tag in all JSDoc headers across the project

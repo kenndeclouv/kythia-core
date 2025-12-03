@@ -4,7 +4,7 @@
  * @file src/cli/commands/LangCheckCommand.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.0-beta
+ * @version 0.11.1-beta
  *
  * @description
  * Performs a deep AST analysis of the codebase to find `t()` translation function calls.
@@ -23,7 +23,25 @@ const glob = require('glob');
 const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 
-function getAllKeys(obj, prefix = '') {
+function deepMerge(target, source) {
+	if (typeof target !== 'object' || target === null) return source;
+	if (typeof source !== 'object' || source === null) return source;
+
+	for (const key of Object.keys(source)) {
+		if (
+			source[key] instanceof Object &&
+			target[key] instanceof Object &&
+			!Array.isArray(source[key])
+		) {
+			target[key] = deepMerge(target[key], source[key]);
+		} else {
+			target[key] = source[key];
+		}
+	}
+	return target;
+}
+
+function getAllKeys(obj, allDefinedKeys, prefix = '') {
 	Object.keys(obj).forEach((key) => {
 		if (key === '_value' || key === 'text') {
 			if (Object.keys(obj).length === 1) return;
@@ -33,7 +51,7 @@ function getAllKeys(obj, prefix = '') {
 		const fullKey = prefix ? `${prefix}.${key}` : key;
 		if (typeof obj[key] === 'object' && obj[key] !== null) {
 			if (key !== 'jobs' && key !== 'shop') {
-				getAllKeys(obj[key], fullKey);
+				getAllKeys(obj[key], allDefinedKeys, fullKey);
 			} else {
 				allDefinedKeys.add(fullKey);
 			}
@@ -49,9 +67,8 @@ class LangCheckCommand extends Command {
 		'Lint translation key usage in code and language files (AST-based)';
 
 	async handle() {
-		const PROJECT_ROOT = path.join(__dirname, '..', '..', '..');
+		const PROJECT_ROOT = process.cwd();
 		const SCAN_DIRECTORIES = ['addons', 'src'];
-		const LANG_DIR = path.join(PROJECT_ROOT, 'src', 'lang');
 		const DEFAULT_LANG = 'en';
 		const IGNORE_PATTERNS = [
 			'**/node_modules/**',
@@ -94,41 +111,53 @@ class LangCheckCommand extends Command {
 		}
 
 		function _loadLocales() {
-			console.log(`\n🔍 Reading language files from: ${LANG_DIR}`);
+			console.log(`\n🔍 Searching for language files in: ${PROJECT_ROOT}`);
 			try {
-				const langFiles = fs
-					.readdirSync(LANG_DIR)
-					.filter(
-						(file) =>
-							file.endsWith('.json') &&
-							!file.includes('_flat') &&
-							!file.includes('_FLAT'),
-					);
+				const langFiles = glob.sync('**/lang/*.json', {
+					cwd: PROJECT_ROOT,
+					ignore: ['**/node_modules/**', '**/dist/**'],
+					absolute: true,
+				});
+
 				if (langFiles.length === 0) {
 					console.error(
 						'\x1b[31m%s\x1b[0m',
-						'❌ No .json files found in the language folder.',
+						'❌ No .json files found in any lang folder.',
 					);
 					return false;
 				}
+
+				let loadedCount = 0;
 				for (const file of langFiles) {
-					const lang = file.replace('.json', '');
-					const content = fs.readFileSync(path.join(LANG_DIR, file), 'utf8');
+					if (file.includes('_flat') || file.includes('_FLAT')) continue;
+
+					const filename = path.basename(file);
+					const lang = filename.replace('.json', '');
+					const content = fs.readFileSync(file, 'utf8');
+
 					try {
-						locales[lang] = JSON.parse(content);
-						console.log(`  > Successfully loaded: ${file}`);
+						const parsed = JSON.parse(content);
+						if (!locales[lang]) {
+							locales[lang] = parsed;
+						} else {
+							// Merge with existing locale data
+							locales[lang] = deepMerge(locales[lang], parsed);
+						}
+						loadedCount++;
 					} catch (jsonError) {
 						console.error(
 							`\x1b[31m%s\x1b[0m`,
-							`❌ Failed to parse JSON: ${file} - ${jsonError.message}`,
+							`❌ Failed to parse JSON: ${path.relative(PROJECT_ROOT, file)} - ${jsonError.message}`,
 						);
 						filesWithErrors++;
 					}
 				}
+				console.log(`  > Successfully loaded ${loadedCount} language files.`);
+
 				if (!locales[DEFAULT_LANG]) {
 					console.error(
 						`\x1b[31m%s\x1b[0m`,
-						`❌ Default language (${DEFAULT_LANG}) not found!`,
+						`❌ Default language (${DEFAULT_LANG}) not found in any loaded files!`,
 					);
 					return false;
 				}
@@ -303,7 +332,7 @@ class LangCheckCommand extends Command {
 
 		if (defaultLocale) {
 			try {
-				getAllKeys(defaultLocale);
+				getAllKeys(defaultLocale, allDefinedKeys);
 			} catch (e) {
 				console.error('Error collecting defined keys:', e);
 			}
