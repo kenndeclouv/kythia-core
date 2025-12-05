@@ -29,9 +29,9 @@ const AddonManager = require('./managers/AddonManager');
 const EventManager = require('./managers/EventManager');
 
 const KythiaMigrator = require('./database/KythiaMigrator');
-// const ModelLoader = require('./database/ModelLoader');
 const bootModels = require('./database/ModelLoader');
 const KythiaModel = require('./database/KythiaModel');
+const kythiaLogger = require('./utils/logger');
 
 class Kythia {
 	/**
@@ -52,7 +52,6 @@ class Kythia {
 	}) {
 		const missingDeps = [];
 		if (!config) missingDeps.push('config');
-		if (!logger) missingDeps.push('logger');
 		if (!translator) {
 			missingDeps.push('translator');
 		} else {
@@ -81,7 +80,7 @@ class Kythia {
 		this.redis = redis;
 		this.sequelize = sequelize;
 
-		this.logger = logger;
+		this.logger = logger || kythiaLogger;
 		this.translator = translator;
 
 		this.container = {

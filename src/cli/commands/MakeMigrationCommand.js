@@ -58,7 +58,7 @@ class MakeMigrationCommand extends Command {
  * @type: Database Migration
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.1-beta
  */
 module.exports = {
     async up(queryInterface, DataTypes) {

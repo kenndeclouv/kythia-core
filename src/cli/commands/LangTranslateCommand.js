@@ -16,6 +16,10 @@
  * -  Context Aware: Preserves keys and complex placeholders.
  */
 
+require('@dotenvx/dotenvx').config({ quiet: true });
+const fs = require('node:fs');
+const path = require('node:path');
+const { GoogleGenAI } = require('@google/genai');
 const Command = require('../Command');
 const pc = require('picocolors');
 
@@ -24,11 +28,6 @@ class LangTranslateCommand extends Command {
 	description = 'Translate en.json to target language using Gemini AI';
 
 	async handle(_options, target) {
-		require('@dotenvx/dotenvx/config');
-		const fs = require('node:fs');
-		const path = require('node:path');
-		const { GoogleGenAI } = require('@google/genai');
-
 		const API_KEYS = (process.env.GEMINI_API_KEYS || '')
 			.split(',')
 			.filter(Boolean);

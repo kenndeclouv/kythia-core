@@ -35,13 +35,7 @@ if (!fs.existsSync(configPath)) {
 
 const config = require(configPath);
 
-const logger = {
-	info: () => {},
-	error: console.error,
-	debug: () => {},
-};
-
-const sequelize = createSequelizeInstance(config, logger);
+const sequelize = createSequelizeInstance(config);
 
 function getMigrationFiles() {
 	const rootDir = process.cwd();

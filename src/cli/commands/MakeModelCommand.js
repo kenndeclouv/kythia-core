@@ -54,13 +54,13 @@ class MakeModelCommand extends Command {
  * @type: Database Model
  * @copyright © ${new Date().getFullYear()} kenndeclouv
  * @assistant chaa & graa
- * @version 0.9.12-beta
+ * @version 0.11.1-beta
  */
 
 const { KythiaModel } = require("kythia-core");
 
 class ${name} extends KythiaModel {
-    static guarded = ["id"];
+    static guarded = [];
 
     static get structure() {
         return {

@@ -23,6 +23,7 @@ const jsonStringify = require('json-stable-stringify');
 const { Model, DataTypes } = require('sequelize');
 const { LRUCache } = require('lru-cache');
 const Utils = require('sequelize').Utils;
+const kythiaLogger = require('../utils/logger');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
@@ -56,7 +57,7 @@ class KythiaModel extends Model {
 	static client;
 	static redis;
 	static isRedisConnected = false;
-	static logger = console;
+	static logger = kythiaLogger;
 	static config = {};
 	static CACHE_VERSION = '1.0.0';
 
@@ -91,8 +92,8 @@ class KythiaModel extends Model {
 	/**
 	 * 🛡️ LARAVEL STYLE: MASS ASSIGNMENT PROTECTION
 	 *
-	 * Kita inject Hook global pas model di-init.
-	 * Hook ini bakal ngecek 'fillable' atau 'guarded' sebelum data diproses.
+	 * We inject a global Hook when the model is initialized.
+	 * This hook will check 'fillable' or 'guarded' before data is processed.
 	 */
 	static init(attributes, options) {
 		const model = super.init(attributes, options);
@@ -233,16 +234,20 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * Helper: Pasang hook fillable/guarded
-	 * (Pindahkan logic dari method static init() kamu ke sini)
+	 * Helper: Sets up Laravel-like mass assignment protection hooks (fillable/guarded)
+	 * and manages timestamp attributes for the model.
+	 * This method should be called during model initialization.
 	 */
 	static _setupLaravelHooks() {
 		this.addHook('beforeValidate', (instance) => {
 			const ModelClass = instance.constructor;
+			const pkAttribute = ModelClass.primaryKeyAttribute || 'id';
 
 			if (ModelClass.fillable && Array.isArray(ModelClass.fillable)) {
 				const allowedFields = ModelClass.fillable;
 				Object.keys(instance.dataValues).forEach((key) => {
+					if (key === pkAttribute) return;
+
 					if (!allowedFields.includes(key)) {
 						delete instance.dataValues[key];
 						if (instance.changed()) instance.changed(key, false);
@@ -255,6 +260,8 @@ class KythiaModel extends Model {
 					return;
 				}
 				Object.keys(instance.dataValues).forEach((key) => {
+					if (key === pkAttribute) return;
+
 					if (forbiddenFields.includes(key)) {
 						delete instance.dataValues[key];
 						if (instance.changed()) instance.changed(key, false);
@@ -275,11 +282,11 @@ class KythiaModel extends Model {
 	 *     Can now be string (URL), object (ioredis options), or array of URLs/options for fallback.
 	 */
 	static setDependencies({ logger, config, redis, redisOptions }) {
-		if (!logger || !config) {
-			throw new Error('KythiaModel.setDependencies requires logger and config');
+		if (!config) {
+			throw new Error('KythiaModel.setDependencies requires config!');
 		}
 
-		this.logger = logger;
+		this.logger = logger || kythiaLogger;
 		this.config = config;
 		this.CACHE_VERSION = config.db?.redisCacheVersion || '1.0.0';
 
@@ -341,9 +348,9 @@ class KythiaModel extends Model {
 
 	/**
 	 * Helper: Track redis error timestamp, and check if error count in interval exceeds tolerance.
-	 * Jika error yang terjadi >= REDIS_ERROR_TOLERANCE_COUNT dalam  REDIS_ERROR_TOLERANCE_INTERVAL_MS,
-	 * barulah coba connect ke redis berikutnya (multi redis), jika tidak ada, baru fallback ke In-Memory (isRedisConnected = false)
-	 * -- KECUALI jika shard: true.
+	 * If errors occur >= REDIS_ERROR_TOLERANCE_COUNT within REDIS_ERROR_TOLERANCE_INTERVAL_MS,
+	 * then try to connect to the next redis (multi redis), if none, then fallback to In-Memory (isRedisConnected = false)
+	 * -- EXCEPT if shard: true.
 	 */
 	static _trackRedisError(err) {
 		const now = Date.now();
@@ -396,7 +403,7 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * Coba switch ke redis URL berikutnya jika ada. Return true jika switching, false jika tidak ada lagi.
+	 * Try switching to the next redis URL if available. Return true if switching, false if no more.
 	 * PRIVATE.
 	 */
 	static _tryRedisFailover() {
@@ -440,7 +447,7 @@ class KythiaModel extends Model {
 
 	/**
 	 * 🔌 Initializes the Redis connection if not already initialized.
-	 * (Versi ini MENGHAPUS lazyConnect dan _attemptConnection untuk fix race condition)
+	 * (This version REMOVES lazyConnect and _attemptConnection to fix race condition)
 	 */
 	static initializeRedis(redisOptions) {
 		if (redisOptions) {
@@ -1186,7 +1193,7 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * 🕒 Tambah item ke Scheduler (Redis Sorted Set)
+	 * 🕒 Add item to Scheduler (Redis Sorted Set)
 	 * @param {string} keySuffix - Suffix key (misal: 'active_schedule')
 	 * @param {number} score - Timestamp/Score
 	 * @param {string} value - Value (biasanya ID)
@@ -1202,7 +1209,7 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * 🕒 Hapus item dari Scheduler
+	 * 🕒 Remove item from Scheduler
 	 */
 	static async scheduleRemove(keySuffix, value) {
 		if (!this.isRedisConnected) return;
@@ -1215,7 +1222,7 @@ class KythiaModel extends Model {
 	}
 
 	/**
-	 * 🕒 Ambil item yang sudah expired (Score <= Now)
+	 * 🕒 Get items that have expired (Score <= Now)
 	 * @returns {Promise<string[]>} Array of IDs
 	 */
 	static async scheduleGetExpired(keySuffix, scoreLimit = Date.now()) {

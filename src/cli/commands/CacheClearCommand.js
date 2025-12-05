@@ -20,7 +20,7 @@ const Command = require('../Command');
 const pc = require('picocolors');
 const readline = require('node:readline');
 const Redis = require('ioredis');
-require('@dotenvx/dotenvx/config');
+require('@dotenvx/dotenvx').config({ quiet: true });
 
 function askQuestion(query) {
 	const rl = readline.createInterface({

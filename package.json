@@ -52,7 +52,9 @@
 		"lru-cache": "^11.2.2",
 		"picocolors": "^1.1.1",
 		"sequelize": "^6.37.7",
-		"umzug": "^3.8.2"
+		"umzug": "^3.8.2",
+		"winston": "^3.18.3",
+		"winston-daily-rotate-file": "^5.0.0"
 	},
 	"peerDependencies": {
 		"discord.js": "^14.22.1"

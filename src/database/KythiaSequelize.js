@@ -11,6 +11,7 @@
  */
 
 const { Sequelize } = require('sequelize');
+const kythiaLogger = require('../utils/logger');
 
 /**
  * 🧩 Creates and returns a Sequelize instance.
@@ -20,7 +21,7 @@ const { Sequelize } = require('sequelize');
  * @param {object} logger - The logger instance
  * @returns {Sequelize} Configured Sequelize instance
  */
-function createSequelizeInstance(config, logger) {
+function createSequelizeInstance(config, logger = kythiaLogger) {
 	const dbConfig = config.db || {};
 	if (!config.db) config.db = dbConfig;
 

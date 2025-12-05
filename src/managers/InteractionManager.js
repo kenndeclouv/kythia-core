@@ -428,7 +428,7 @@ class InteractionManager {
 				}
 			} else {
 				this.logger.error(
-					`Handler untuk modal ${customIdPrefix} formatnya salah (bukan fungsi atau { execute: ... })`,
+					`Handler for modal ${customIdPrefix} has an invalid format (not a function or { execute: ... })`,
 				);
 			}
 		}
@@ -464,7 +464,7 @@ class InteractionManager {
 				}
 			} else {
 				this.logger.error(
-					`Handler untuk select menu ${customIdPrefix} formatnya salah`,
+					`Handler for select menu ${customIdPrefix} has an invalid format`,
 				);
 			}
 		}
