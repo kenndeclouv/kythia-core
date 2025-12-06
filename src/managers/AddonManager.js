@@ -195,7 +195,9 @@ class AddonManager {
 			module = this._instantiateBaseCommand(module);
 		}
 
-		if (!module || !module.data) return null;
+		const data =
+			module.data || module.slashCommand || module.contextMenuCommand;
+		if (!module || !data) return null;
 
 		let builderClass;
 
@@ -485,8 +487,9 @@ class AddonManager {
 			...commandDef,
 		};
 
+		const mainData = commandDef.data || commandDef.slashCommand;
 		const mainBuilder = this._createBuilderFromData(
-			commandDef.data,
+			mainData,
 			SlashCommandBuilder,
 		);
 
@@ -532,10 +535,12 @@ class AddonManager {
 				}
 
 				if (!isSubcommand) continue;
-				if (!subModule.data) continue;
+
+				const subData = subModule.data || subModule.slashCommand;
+				if (!subData) continue;
 
 				const subBuilder = this._createBuilderFromData(
-					subModule.data,
+					subData,
 					SlashCommandSubcommandBuilder,
 				);
 
@@ -567,10 +572,11 @@ class AddonManager {
 						groupModule = this._instantiateBaseCommand(groupModule);
 					}
 
-					if (!groupModule.data) continue;
+					const groupData = groupModule.data || groupModule.slashCommand;
+					if (!groupData) continue;
 
 					const groupBuilder = this._createBuilderFromData(
-						groupModule.data,
+						groupData,
 						SlashCommandSubcommandGroupBuilder,
 					);
 
@@ -587,10 +593,11 @@ class AddonManager {
 							subModule = this._instantiateBaseCommand(subModule);
 						}
 
-						if (!subModule.data) continue;
+						const subData = subModule.data || subModule.slashCommand;
+						if (!subData) continue;
 
 						const subBuilder = this._createBuilderFromData(
-							subModule.data,
+							subData,
 							SlashCommandSubcommandBuilder,
 						);
 
@@ -660,10 +667,13 @@ class AddonManager {
 				if (this._isBaseCommandClass(commandDef)) {
 					commandDef = this._instantiateBaseCommand(commandDef);
 				}
+
+				const mainData = commandDef.data || commandDef.slashCommand;
 				const mainBuilder = this._createBuilderFromData(
-					commandDef.data,
+					mainData,
 					SlashCommandBuilder,
 				);
+
 				const mainCommandName = mainBuilder.name;
 
 				if (commandDef.featureFlag) {
@@ -696,9 +706,12 @@ class AddonManager {
 						if (this._isBaseCommandClass(subModule)) {
 							subModule = this._instantiateBaseCommand(subModule);
 						}
-						if (!subModule.data) continue;
+
+						const subData = subModule.data || subModule.slashCommand;
+						if (!subData) continue;
+
 						const subBuilder = this._createBuilderFromData(
-							subModule.data,
+							subData,
 							SlashCommandSubcommandBuilder,
 						);
 						mainBuilder.addSubcommand(subBuilder);
@@ -721,10 +734,13 @@ class AddonManager {
 						if (this._isBaseCommandClass(groupDef)) {
 							groupDef = this._instantiateBaseCommand(groupDef);
 						}
+
+						const groupData = groupDef.data || groupDef.slashCommand;
 						const groupBuilder = this._createBuilderFromData(
-							groupDef.data,
+							groupData,
 							SlashCommandSubcommandGroupBuilder,
 						);
+
 						const subGroupList = [];
 						const subGroupContents = fs.readdirSync(contentPath, {
 							withFileTypes: true,
@@ -740,9 +756,13 @@ class AddonManager {
 								if (this._isBaseCommandClass(subSubModule)) {
 									subSubModule = this._instantiateBaseCommand(subSubModule);
 								}
-								if (!subSubModule.data) continue;
+
+								const subSubData =
+									subSubModule.data || subSubModule.slashCommand;
+								if (!subSubData) continue;
+
 								const subSubBuilder = this._createBuilderFromData(
-									subSubModule.data,
+									subSubData,
 									SlashCommandSubcommandBuilder,
 								);
 								groupBuilder.addSubcommand(subSubBuilder);
@@ -978,10 +998,48 @@ class AddonManager {
 						if (summaryContext) loadedCommandsSummary.push(summaryContext);
 					}
 
+					if (commandModule.prefixCommand) {
+						const pConfig = commandModule.prefixCommand;
+						// Bisa pakai properti .name atau .trigger
+						const name = pConfig.name || pConfig.trigger;
+
+						if (name) {
+							// Merge properti prefixCommand ke root module biar messageCreate bisa baca (e.g. aliases)
+							Object.assign(commandModule, pConfig);
+
+							// Cek apakah sudah ada command dengan nama ini (misal dari slashCommand)
+							if (!this.client.commands.has(name)) {
+								if (commandNamesSet.has(name)) {
+									this.logger.warn(
+										`Duplicate prefix command name detected: "${name}" in ${itemPath}`,
+									);
+								} else {
+									commandNamesSet.add(name);
+									this.client.commands.set(name, commandModule);
+								}
+							} else {
+								// Kalau sudah ada (misal hybrid slash + prefix), kita update propertinya
+								const existing = this.client.commands.get(name);
+								if (existing) Object.assign(existing, pConfig);
+							}
+
+							// Buat summary log (tambahin variabel summaryPrefix di atas dulu ya: let summaryPrefix = null;)
+							const summaryPrefix = {
+								type: 'single',
+								name: name,
+								folder: addon.name,
+								kind: 'prefix',
+							};
+							loadedCommandsSummary.push(summaryPrefix);
+							this.commandCategoryMap.set(name, addon.name);
+						}
+					}
+
 					if (
 						!isClass &&
 						!commandModule.slashCommand &&
-						!commandModule.contextMenuCommand
+						!commandModule.contextMenuCommand &&
+						!commandModule.prefixCommand
 					) {
 						const summary = this.registerCommand(
 							commandModule,
@@ -1175,12 +1233,18 @@ class AddonManager {
 						let kindLabel = '';
 						if (cmd.kind === 'slash') kindLabel = ' [slash]';
 						else if (cmd.kind === 'contextMenu') kindLabel = ' [contextMenu]';
+						else if (cmd.kind === 'prefix') kindLabel = ' [prefix]';
+
+						const prefixSymbol = cmd.kind === 'prefix' ? '!' : '/';
+
 						if (cmd.folder) {
 							this.logger.info(
-								`     └─ /${cmd.name} (${cmd.folder})${kindLabel}`,
+								`     └─ ${prefixSymbol}${cmd.name} (${cmd.folder})${kindLabel}`,
 							);
 						} else {
-							this.logger.info(`     └─ /${cmd.name}${kindLabel}`);
+							this.logger.info(
+								`     └─ ${prefixSymbol}${cmd.name}${kindLabel}`,
+							);
 						}
 					}
 				}

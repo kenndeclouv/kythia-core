@@ -27,11 +27,14 @@ const InteractionManager = require('./managers/InteractionManager');
 const ShutdownManager = require('./managers/ShutdownManager');
 const AddonManager = require('./managers/AddonManager');
 const EventManager = require('./managers/EventManager');
+const MiddlewareManager = require('./managers/MiddlewareManager');
 
 const KythiaMigrator = require('./database/KythiaMigrator');
 const bootModels = require('./database/ModelLoader');
 const KythiaModel = require('./database/KythiaModel');
 const kythiaLogger = require('./utils/logger');
+
+const loadDiscordHelpers = require('./utils/discord');
 
 class Kythia {
 	/**
@@ -45,9 +48,9 @@ class Kythia {
 		redis,
 		sequelize,
 		translator,
-		models,
-		helpers,
-		utils,
+		models = {},
+		helpers = {},
+		utils = {},
 		appRoot,
 	}) {
 		const missingDeps = [];
@@ -74,7 +77,20 @@ class Kythia {
 		);
 
 		this.models = models;
-		this.helpers = helpers;
+		const internalDiscordHelpers = loadDiscordHelpers({
+			kythiaConfig: this.kythiaConfig,
+			models: this.models,
+		});
+		const userHelpers = helpers || {};
+		const userDiscordHelpers = userHelpers.discord || {};
+		this.helpers = {
+			...userHelpers,
+			discord: {
+				...internalDiscordHelpers,
+				...userDiscordHelpers,
+			},
+		};
+
 		this.utils = utils;
 
 		this.redis = redis;
@@ -503,11 +519,20 @@ class Kythia {
 			});
 			this.eventManager.initialize();
 
+			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬[ Middleware ]▬▬▬▬▬▬▬▬▬▬▬▬▬');
+			const middlewareManager = new MiddlewareManager({
+				container: this.container,
+			});
+			await middlewareManager.loadMiddlewares();
+
+			this.container.middlewareManager = middlewareManager;
+
 			this.interactionManager = new InteractionManager({
 				client: this.client,
 				container: this.container,
 				handlers: handlers,
 			});
+
 			this.interactionManager.initialize();
 
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬[ Deploy Commands ]▬▬▬▬▬▬▬▬▬▬▬▬▬');

@@ -52,6 +52,8 @@ class InteractionManager {
 		this.logger = this.container.logger;
 		this.t = this.container.t;
 
+		this.middlewareManager = this.container.middlewareManager;
+
 		this.ServerSetting = this.models.ServerSetting;
 		this.KythiaVoter = this.models.KythiaVoter;
 		this.isTeam = this.helpers.discord.isTeam;
@@ -67,16 +69,10 @@ class InteractionManager {
 	 * Sets up the main Discord interaction handler for commands, autocomplete, buttons, and modals.
 	 */
 	initialize() {
-		function formatPerms(permsArray) {
-			return permsArray
-				.map((perm) => perm.replace(/([A-Z])/g, ' $1').trim())
-				.join(', ');
-		}
-
 		this.client.on(Events.InteractionCreate, async (interaction) => {
 			try {
 				if (interaction.isChatInputCommand()) {
-					await this._handleChatInputCommand(interaction, formatPerms);
+					await this._handleChatInputCommand(interaction);
 				} else if (interaction.isAutocomplete()) {
 					await this._handleAutocomplete(interaction);
 				} else if (interaction.isButton()) {
@@ -112,7 +108,7 @@ class InteractionManager {
 	 * Handle chat input commands
 	 * @private
 	 */
-	async _handleChatInputCommand(interaction, formatPerms) {
+	async _handleChatInputCommand(interaction) {
 		let commandKey = interaction.commandName;
 		const group = interaction.options.getSubcommandGroup(false);
 		const subcommand = interaction.options.getSubcommand(false);
@@ -133,168 +129,34 @@ class InteractionManager {
 			});
 		}
 
-		if (interaction.inGuild()) {
-			const category = this.commandCategoryMap.get(interaction.commandName);
-			const featureFlag = this.categoryToFeatureMap.get(category);
+		// if (interaction.inGuild()) {
+		// 	const category = this.commandCategoryMap.get(interaction.commandName);
+		// 	const featureFlag = this.categoryToFeatureMap.get(category);
 
-			if (featureFlag && !this.isOwner(interaction.user.id)) {
-				const settings = await this.ServerSetting.getCache({
-					guildId: interaction.guild.id,
-				});
+		// 	if (featureFlag && !this.isOwner(interaction.user.id)) {
+		// 		const settings = await this.ServerSetting.getCache({
+		// 			guildId: interaction.guild.id,
+		// 		});
 
-				if (
-					settings &&
-					Object.hasOwn(settings, featureFlag) &&
-					settings[featureFlag] === false
-				) {
-					const featureName =
-						category.charAt(0).toUpperCase() + category.slice(1);
-					const reply = await this.t(
-						interaction,
-						'common.error.feature.disabled',
-						{ feature: featureName },
-					);
-					return interaction.reply({ content: reply });
-				}
-			}
-		}
+		// 		if (
+		// 			settings &&
+		// 			Object.hasOwn(settings, featureFlag) &&
+		// 			settings[featureFlag] === false
+		// 		) {
+		// 			const featureName =
+		// 				category.charAt(0).toUpperCase() + category.slice(1);
+		// 			const reply = await this.t(
+		// 				interaction,
+		// 				'common.error.feature.disabled',
+		// 				{ feature: featureName },
+		// 			);
+		// 			return interaction.reply({ content: reply });
+		// 		}
+		// 	}
+		// }
 
-		if (command.guildOnly && !interaction.inGuild()) {
-			return interaction.reply({
-				content: await this.t(interaction, 'common.error.guild.only'),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
-		if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-			return interaction.reply({
-				content: await this.t(interaction, 'common.error.not.owner'),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
-		if (command.teamOnly && !this.isOwner(interaction.user.id)) {
-			const isTeamMember = await this.isTeam(interaction.user);
-			if (!isTeamMember)
-				return interaction.reply({
-					content: await this.t(interaction, 'common.error.not.team'),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-		if (command.permissions && interaction.inGuild()) {
-			const missingPerms = interaction.member.permissions.missing(
-				command.permissions,
-			);
-			if (missingPerms.length > 0)
-				return interaction.reply({
-					content: await this.t(
-						interaction,
-						'common.error.user.missing.perms',
-						{ perms: formatPerms(missingPerms) },
-					),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-		if (command.botPermissions && interaction.inGuild()) {
-			const missingPerms = interaction.guild.members.me.permissions.missing(
-				command.botPermissions,
-			);
-			if (missingPerms.length > 0)
-				return interaction.reply({
-					content: await this.t(interaction, 'common.error.bot.missing.perms', {
-						perms: formatPerms(missingPerms),
-					}),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-
-		if (command.voteLocked && !this.isOwner(interaction.user.id)) {
-			const voter = await this.KythiaVoter.getCache({
-				userId: interaction.user.id,
-			});
-			const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-
-			if (!voter || voter.votedAt < twelveHoursAgo) {
-				const container = new ContainerBuilder().setAccentColor(
-					convertColor(this.kythiaConfig.bot.color, {
-						from: 'hex',
-						to: 'decimal',
-					}),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.error.vote.locked.text'),
-					),
-				);
-				container.addSeparatorComponents(
-					new SeparatorBuilder()
-						.setSpacing(SeparatorSpacingSize.Small)
-						.setDivider(true),
-				);
-				container.addActionRowComponents(
-					new ActionRowBuilder().addComponents(
-						new ButtonBuilder()
-							.setLabel(
-								await this.t(interaction, 'common.error.vote.locked.button', {
-									username: interaction.client.user.username,
-								}),
-							)
-							.setStyle(ButtonStyle.Link)
-							.setURL(
-								`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`,
-							),
-					),
-				);
-				container.addSeparatorComponents(
-					new SeparatorBuilder()
-						.setSpacing(SeparatorSpacingSize.Small)
-						.setDivider(true),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.container.footer', {
-							username: interaction.client.user.username,
-						}),
-					),
-				);
-				return interaction.reply({
-					components: [container],
-					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-				});
-			}
-		}
-
-		const cooldownDuration =
-			command.cooldown ?? this.kythiaConfig.bot.globalCommandCooldown ?? 0;
-
-		if (cooldownDuration > 0 && !this.isOwner(interaction.user.id)) {
-			const { cooldowns } = this.client;
-
-			if (!cooldowns.has(command.name)) {
-				cooldowns.set(command.name, new Collection());
-			}
-
-			const now = Date.now();
-			const timestamps = cooldowns.get(command.name);
-			const cooldownAmount = cooldownDuration * 1000;
-
-			if (timestamps.has(interaction.user.id)) {
-				const expirationTime =
-					timestamps.get(interaction.user.id) + cooldownAmount;
-
-				if (now < expirationTime) {
-					const timeLeft = (expirationTime - now) / 1000;
-					const reply = await this.t(interaction, 'common.error.cooldown', {
-						time: timeLeft.toFixed(1),
-					});
-					return interaction.reply({
-						content: reply,
-						flags: MessageFlags.Ephemeral,
-					});
-				}
-			}
-
-			timestamps.set(interaction.user.id, now);
-			setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-		}
+		const canRun = await this.middlewareManager.handle(interaction, command);
+		if (!canRun) return;
 
 		if (typeof command.execute === 'function') {
 			if (!interaction.logger) {
