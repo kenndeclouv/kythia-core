@@ -21,6 +21,7 @@
 const { REST, Routes, Collection } = require('discord.js');
 const KythiaClient = require('./KythiaClient');
 const Sentry = require('@sentry/node');
+const path = require('node:path');
 const figlet = require('figlet');
 
 const InteractionManager = require('./managers/InteractionManager');
@@ -28,6 +29,7 @@ const ShutdownManager = require('./managers/ShutdownManager');
 const AddonManager = require('./managers/AddonManager');
 const EventManager = require('./managers/EventManager');
 const MiddlewareManager = require('./managers/MiddlewareManager');
+const TranslatorManager = require('./managers/TranslatorManager');
 
 const KythiaMigrator = require('./database/KythiaMigrator');
 const bootModels = require('./database/ModelLoader');
@@ -47,7 +49,6 @@ class Kythia {
 		logger,
 		redis,
 		sequelize,
-		translator,
 		models = {},
 		helpers = {},
 		utils = {},
@@ -55,12 +56,7 @@ class Kythia {
 	}) {
 		const missingDeps = [];
 		if (!config) missingDeps.push('config');
-		if (!translator) {
-			missingDeps.push('translator');
-		} else {
-			if (!translator.t) missingDeps.push('translator.t');
-			if (!translator.loadLocales) missingDeps.push('translator.loadLocales');
-		}
+
 		if (missingDeps.length > 0) {
 			console.error(
 				`FATAL: Missing required dependencies: ${missingDeps.join(', ')}.`,
@@ -97,16 +93,14 @@ class Kythia {
 		this.sequelize = sequelize;
 
 		this.logger = logger || kythiaLogger;
-		this.translator = translator;
 
 		this.container = {
 			client: this.client,
 			sequelize: this.sequelize,
 			logger: this.logger,
-			t: this.translator.t,
+
 			redis: this.redis,
 			kythiaConfig: this.kythiaConfig,
-			translator: this.translator,
 
 			models: this.models,
 			helpers: this.helpers,
@@ -478,8 +472,8 @@ class Kythia {
 		try {
 			const shouldDeploy = process.argv.includes('--deploy');
 
-			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Locales & Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
-			this.translator.loadLocales();
+			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
+
 			if (
 				this.helpers?.fonts &&
 				typeof this.helpers.fonts.loadFonts === 'function'
@@ -487,7 +481,18 @@ class Kythia {
 				this.helpers.fonts.loadFonts({ logger: this.logger });
 			}
 
-			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Initialize Cache ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Translator System ]▬▬▬▬▬▬▬▬▬▬▬');
+
+			this.translator = new TranslatorManager({ container: this.container });
+
+			const coreLangPath = path.join(__dirname, 'lang');
+			this.translator.loadLocalesFromDir(coreLangPath);
+
+			const userLangPath = path.join(this.container.appRoot, 'lang');
+			this.translator.loadLocalesFromDir(userLangPath);
+
+			this.container.translator = this.translator;
+			this.container.t = this.translator.t.bind(this.translator);
 
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Kythia Addons ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
 			this.addonManager = new AddonManager({

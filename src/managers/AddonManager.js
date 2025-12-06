@@ -344,6 +344,16 @@ class AddonManager {
 				}
 			}
 
+			let hasLocales = false;
+			const addonLangPath = path.join(addonDir, 'lang');
+
+			if (fs.existsSync(addonLangPath)) {
+				if (this.container.translator) {
+					this.container.translator.loadLocalesFromDir(addonLangPath);
+					hasLocales = true;
+				}
+			}
+
 			const loadedCommandsSummary = [];
 			const loadedEventsSummary = [];
 			const loadedRegisterSummary = [];
@@ -420,6 +430,7 @@ class AddonManager {
 				commands: loadedCommandsSummary,
 				events: loadedEventsSummary,
 				register: loadedRegisterSummary,
+				hasLocales: hasLocales,
 			});
 		}
 
@@ -1248,6 +1259,9 @@ class AddonManager {
 						}
 					}
 				}
+			}
+			if (addon.hasLocales) {
+				this.logger.info('  🌐  Locales: Loaded');
 			}
 			if (addon.register?.length) {
 				this.logger.info('  🧩 Component(s)');

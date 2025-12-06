@@ -85,7 +85,7 @@ class InteractionManager {
 					interaction.isUserContextMenuCommand() ||
 					interaction.isMessageContextMenuCommand()
 				) {
-					await this._handleContextMenuCommand(interaction, formatPerms);
+					await this._handleContextMenuCommand(interaction);
 				}
 			} catch (error) {
 				await this._handleInteractionError(interaction, error);
@@ -336,168 +336,12 @@ class InteractionManager {
 	 * Handle context menu commands
 	 * @private
 	 */
-	async _handleContextMenuCommand(interaction, formatPerms) {
+	async _handleContextMenuCommand(interaction) {
 		const command = this.client.commands.get(interaction.commandName);
 		if (!command) return;
 
-		if (command.guildOnly && !interaction.inGuild()) {
-			return interaction.reply({
-				content: await this.t(interaction, 'common.error.guild.only'),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
-		if (command.ownerOnly && !this.isOwner(interaction.user.id)) {
-			return interaction.reply({
-				content: await this.t(interaction, 'common.error.not.owner'),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
-		if (command.teamOnly && !this.isOwner(interaction.user.id)) {
-			const isTeamMember = await this.isTeam(interaction.user);
-			if (!isTeamMember)
-				return interaction.reply({
-					content: await this.t(interaction, 'common.error.not.team'),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-		if (command.permissions && interaction.inGuild()) {
-			const missingPerms = interaction.member.permissions.missing(
-				command.permissions,
-			);
-			if (missingPerms.length > 0)
-				return interaction.reply({
-					content: await this.t(
-						interaction,
-						'common.error.user.missing.perms',
-						{ perms: formatPerms(missingPerms) },
-					),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-		if (command.botPermissions && interaction.inGuild()) {
-			const missingPerms = interaction.guild.members.me.permissions.missing(
-				command.botPermissions,
-			);
-			if (missingPerms.length > 0)
-				return interaction.reply({
-					content: await this.t(interaction, 'common.error.bot.missing.perms', {
-						perms: formatPerms(missingPerms),
-					}),
-					flags: MessageFlags.Ephemeral,
-				});
-		}
-		if (command.isInMainGuild && !this.isOwner(interaction.user.id)) {
-			const mainGuild = this.client.guilds.cache.get(
-				this.kythiaConfig.bot.mainGuildId,
-			);
-			if (!mainGuild) {
-				this.logger.error(
-					`❌ [isInMainGuild Check] Error: Bot is not a member of the main guild specified in config: ${this.kythiaConfig.bot.mainGuildId}`,
-				);
-			}
-			try {
-				await mainGuild.members.fetch(interaction.user.id);
-			} catch (error) {
-				const container = new ContainerBuilder().setAccentColor(
-					convertColor(this.kythiaConfig.bot.color, {
-						from: 'hex',
-						to: 'decimal',
-					}),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.error.not.in.main.guild.text', {
-							name: mainGuild.name,
-						}),
-					),
-				);
-				container.addSeparatorComponents(
-					new SeparatorBuilder()
-						.setSpacing(SeparatorSpacingSize.Small)
-						.setDivider(true),
-				);
-				container.addActionRowComponents(
-					new ActionRowBuilder().addComponents(
-						new ButtonBuilder()
-							.setLabel(
-								await this.t(
-									interaction,
-									'common.error.not.in.main.guild.button.join',
-								),
-							)
-							.setStyle(ButtonStyle.Link)
-							.setURL(this.kythiaConfig.settings.supportServer),
-					),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.container.footer', {
-							username: interaction.client.user.username,
-						}),
-					),
-				);
-				this.logger.error(error);
-				return interaction.reply({
-					components: [container],
-					flags: MessageFlags.IsPersistent | MessageFlags.IsComponentsV2,
-				});
-			}
-		}
-		if (command.voteLocked && !this.isOwner(interaction.user.id)) {
-			const voter = await this.KythiaVoter.getCache({
-				userId: interaction.user.id,
-			});
-			const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-
-			if (!voter || voter.votedAt < twelveHoursAgo) {
-				const container = new ContainerBuilder().setAccentColor(
-					convertColor(this.kythiaConfig.bot.color, {
-						from: 'hex',
-						to: 'decimal',
-					}),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.error.vote.locked.text'),
-					),
-				);
-				container.addSeparatorComponents(
-					new SeparatorBuilder()
-						.setSpacing(SeparatorSpacingSize.Small)
-						.setDivider(true),
-				);
-				container.addActionRowComponents(
-					new ActionRowBuilder().addComponents(
-						new ButtonBuilder()
-							.setLabel(
-								await this.t(interaction, 'common.error.vote.locked.button', {
-									username: interaction.client.user.username,
-								}),
-							)
-							.setStyle(ButtonStyle.Link)
-							.setURL(
-								`https://top.gg/bot/${this.kythiaConfig.bot.clientId}/vote`,
-							),
-					),
-				);
-				container.addSeparatorComponents(
-					new SeparatorBuilder()
-						.setSpacing(SeparatorSpacingSize.Small)
-						.setDivider(true),
-				);
-				container.addTextDisplayComponents(
-					new TextDisplayBuilder().setContent(
-						await this.t(interaction, 'common.container.footer', {
-							username: interaction.client.user.username,
-						}),
-					),
-				);
-				return interaction.reply({
-					components: [container],
-					flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-				});
-			}
-		}
+		const canRun = await this.middlewareManager.handle(interaction, command);
+		if (!canRun) return;
 
 		if (!interaction.logger) {
 			interaction.logger = this.logger;

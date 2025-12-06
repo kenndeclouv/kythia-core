@@ -1,0 +1,85 @@
+{
+	"common": {
+		"error": {
+			"generic": "❌ | An error occurred while executing this command. Please try again later.",
+			"not": {
+				"owner": "❌ | You are not my owner!",
+				"team": "❌ | You are kythia's team",
+				"your": {
+					"interaction": "❌ | This interaction is not for you! Use /help to get your own."
+				},
+				"in": {
+					"main": {
+						"guild": {
+							"text": "## Join to use this command\nYou are not in the {name} server.\nto access this command, please join the {name} server.",
+							"button": {
+								"join": "🔗 Join Now!"
+							}
+						}
+					}
+				}
+			},
+			"feature": {
+				"disabled": "❌ | This feature is currently disabled. Please contact the owner."
+			},
+			"button": {
+				"join": {
+					"support": {
+						"server": "🔗 Join Support Server"
+					}
+				},
+				"contact": {
+					"owner": "👑 Contact Owner"
+				}
+			},
+			"guild": {
+				"only": "## ❌ Guild Only\nThis command can only be used in a server."
+			},
+			"user": {
+				"missing": {
+					"perms": "❌ User Missing Perms\nYou do not have the required permissions ({perms}) to use this command"
+				}
+			},
+			"bot": {
+				"missing": {
+					"perms": "❌ Bot Missing Perms\nI do not have the required permissions ({perms}) to execute this command action."
+				}
+			},
+			"cooldown": "## ❌ Cooldown\nYou are on cooldown. Please wait {time} seconds before using this command again.",
+			"command": {
+				"not": {
+					"found": "## ❌ Command Not Found\nThis command was not found or is under maintenance."
+				}
+			},
+			"vote": {
+				"locked": {
+					"text": "## 🩷 Vote Required\nThis command is only available to users who have voted in the last 12 hours.\n\nSupport Kythia with your vote to unlock this feature!",
+					"button": "🩷 Vote {username}"
+				}
+			}
+		},
+		"time": {
+			"days": "days",
+			"hours": "hours",
+			"minutes": "minutes",
+			"seconds": "seconds"
+		},
+		"embed": {
+			"footer": "© {username} by kenndeclouv"
+		},
+		"container": {
+			"footer": "-# © {username} by kenndeclouv"
+		},
+		"automod": {
+			"text": "## 🛡️ AutoMod Action\n`{ruleName}` has taken action on the user.",
+			"field": {
+				"user": "User",
+				"rule": {
+					"trigger": "Rule Trigger"
+				}
+			}
+		},
+		"previous": "◀️",
+		"next": "▶️"
+	}
+}
