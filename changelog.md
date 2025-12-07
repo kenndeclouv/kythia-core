@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.12.0-beta.1](https://github.com/kenndeclouv/kythia-core/compare/v0.12.0-beta...v0.12.0-beta.1) (2025-12-07)
+
+
+### 🔧 Changed
+
+* Explicitly define access modifiers, refine `kythiaConfig` and `isTeam` types, and enhance interaction handling with middleware checks and logger injection. ([5f53fc3](https://github.com/kenndeclouv/kythia-core/commit/5f53fc3bc63ff9c7e29437ae523382a30d536ff8))
+
 ## [0.12.0-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.9.6-beta...v0.12.0-beta) (2025-12-07)
 
 
