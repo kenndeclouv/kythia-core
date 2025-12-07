@@ -2,11 +2,21 @@
 	"name": "kythia-core",
 	"version": "0.11.1-beta",
 	"description": "Core library for the Kythia main Discord bot: extensible, modular, and scalable foundation for commands, components, and event management.",
-	"main": "index.js",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist",
+		"src/lang",
+		"LICENSE",
+		"README.md"
+	],
 	"scripts": {
 		"format": "biome format --write .",
 		"fix": "biome check --write .",
-		"prepare": "husky"
+		"prepare": "husky",
+		"build": "tsc && cp -r src/lang dist/",
+		"watch": "tsc -w && cp -r src/lang dist/",
+		"dev": "bun run build && yalc push"
 	},
 	"lint-staged": {
 		"*.{js,json}": [
@@ -14,7 +24,7 @@
 		]
 	},
 	"bin": {
-		"kythia": "./src/cli/index.js"
+		"kythia": "./dist/cli/index.js"
 	},
 	"keywords": [
 		"kythia",
@@ -65,7 +75,15 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.7",
+		"@types/async-exit-hook": "^2.0.2",
+		"@types/babel__traverse": "^7.28.0",
+		"@types/cli-color": "^2.0.6",
+		"@types/fs-extra": "^11.0.4",
+		"@types/node": "^24.10.1",
+		"@types/sequelize": "^4.28.20",
 		"husky": "^9.1.7",
-		"lint-staged": "^16.2.7"
+		"lint-staged": "^16.2.7",
+		"ts-node-dev": "^2.0.0",
+		"typescript": "^5.9.3"
 	}
 }

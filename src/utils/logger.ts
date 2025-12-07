@@ -1,0 +1,224 @@
+/**
+ * 📄 Logger
+ *
+ * @file src/utils/logger.js
+ * @copyright © 2025 kenndeclouv
+ * @assistant chaa & graa
+ * @version 0.11.1-beta
+ *
+ * @description
+ * Colorized and enhanced logger for the Discord bot.
+ * Prints readable, color-coded logs to the console and writes structured logs
+ * to rotated files. Includes helpers to flush and exit safely, and captures
+ * unhandled exceptions/rejections.
+ *
+ * - Distinct colors per level (console)
+ * - Optional timestamp formatting per config
+ * - Daily rotating log files for combined and error logs
+ * - Flush-and-exit helper to ensure all logs are written
+ */
+/**
+ * 📄 Logger
+ * @file src/utils/logger.ts
+ */
+
+import winston from 'winston';
+import 'winston-daily-rotate-file'; // Ini auto-attach ke winston.transports
+import path from 'node:path';
+import fs from 'node:fs';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const clc = require('cli-color');
+
+import type { KythiaLogger } from '../types';
+
+const logDir = 'logs';
+// Kita asumsikan config ada di root process
+const configPath = path.resolve(process.cwd(), 'kythia.config.js');
+
+// Helper buat load config JS (karena config bot biasanya JS)
+let kythiaConfig: any;
+try {
+	if (fs.existsSync(configPath)) {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		kythiaConfig = require(configPath);
+	} else {
+		// Fallback dummy config biar gak crash kalau dipanggil sebagai library murni
+		kythiaConfig = { env: 'development', settings: {} };
+	}
+} catch (e) {
+	console.warn('⚠️ Logger could not load kythia.config.js');
+	kythiaConfig = { env: 'development', settings: {} };
+}
+
+if (!fs.existsSync(logDir)) {
+	fs.mkdirSync(logDir);
+}
+
+const isProduction = kythiaConfig.env === 'production';
+
+const levelColors: Record<string, any> = {
+	error: clc.bgRed.whiteBright.bold,
+	warn: clc.bgYellow.black.bold,
+	info: clc.bgCyan.black.bold,
+	debug: clc.bgMagenta.white.bold,
+	silly: clc.bgBlue.white,
+	verbose: clc.bgGreen.black,
+	default: clc.bgWhite.black,
+};
+
+const messageColors: Record<string, any> = {
+	error: clc.redBright,
+	warn: clc.yellowBright,
+	info: clc.white,
+	debug: clc.magentaBright,
+	silly: clc.blueBright,
+	verbose: clc.greenBright,
+	default: clc.white,
+};
+
+const consoleLevelFilter = winston.format((info: any, opts: any) => {
+	if (opts.mode === 'all' || opts.levels.includes(info.level)) {
+		return info;
+	}
+	return false;
+});
+
+const consoleFormatters = [];
+
+if (
+	kythiaConfig.settings?.logFormat &&
+	kythiaConfig.settings.logFormat !== 'none'
+) {
+	consoleFormatters.push(
+		winston.format.timestamp({
+			format: kythiaConfig.settings.logFormat || 'HH:mm:ss',
+		}),
+	);
+}
+
+consoleFormatters.push(
+	winston.format.splat(),
+	winston.format.printf(({ level, message, timestamp, label }) => {
+		const levelKey = level in levelColors ? level : 'default';
+		const msgKey = level in messageColors ? level : 'default';
+
+		const levelLabel = levelColors[levelKey](` ${level.toUpperCase()} `);
+		const timeLabel = timestamp ? clc.blackBright(timestamp) : '';
+		const categoryLabel = label ? clc.bgYellow.black.bold(` ${label} `) : '';
+
+		let msg: any;
+		if (typeof message === 'object' && message !== null) {
+			msg = messageColors[msgKey](JSON.stringify(message, null, 2));
+		} else {
+			msg = messageColors[msgKey](message);
+		}
+
+		return `${timeLabel} ${categoryLabel}${levelLabel} ${msg}`.trim();
+	}),
+);
+
+const colorConsoleFormat = winston.format.combine(...consoleFormatters);
+
+const logger = winston.createLogger({
+	level: isProduction ? 'info' : 'debug',
+	transports: [
+		new winston.transports.Console({
+			format: winston.format.combine(
+				consoleLevelFilter({
+					levels: (kythiaConfig.settings?.logConsoleFilter || 'all')
+						.split(',')
+						.map((l: string) => l.trim()),
+					mode: kythiaConfig.settings?.logConsoleFilter || 'all',
+				}),
+				colorConsoleFormat,
+			),
+		}),
+		new winston.transports.DailyRotateFile({
+			level: 'info',
+			filename: path.join(logDir, '%DATE%-combined.log'),
+			datePattern: 'YYYY-MM-DD',
+			zippedArchive: true,
+			maxSize: '20m',
+			maxFiles: '14d',
+			format: winston.format.combine(
+				winston.format.timestamp(),
+				winston.format.json(),
+			),
+		}),
+		new winston.transports.DailyRotateFile({
+			level: 'error',
+			filename: path.join(logDir, '%DATE%-error.log'),
+			datePattern: 'YYYY-MM-DD',
+			zippedArchive: true,
+			maxSize: '20m',
+			maxFiles: '30d',
+			format: winston.format.combine(
+				winston.format.timestamp(),
+				winston.format.json(),
+			),
+		}),
+	],
+	exceptionHandlers: [
+		new winston.transports.File({
+			filename: path.join(logDir, 'exceptions.log'),
+			format: winston.format.combine(
+				winston.format.timestamp(),
+				winston.format.json(),
+			),
+		}),
+	],
+	rejectionHandlers: [
+		new winston.transports.File({
+			filename: path.join(logDir, 'rejections.log'),
+			format: winston.format.combine(
+				winston.format.timestamp(),
+				winston.format.json(),
+			),
+		}),
+	],
+	exitOnError: false,
+}) as KythiaLogger;
+
+/**
+ * Ensures all logs are flushed before exiting the process.
+ */
+function exitAfterFlush(code = 0) {
+	logger.info(clc.yellowBright(`Process will exit with code: ${code}`));
+
+	const transportPromises = logger.transports.map((transport) => {
+		return new Promise((resolve) => transport.on('finish', resolve));
+	});
+
+	logger.end();
+
+	Promise.all(transportPromises).then(() => {
+		process.exit(code);
+	});
+}
+
+// Attach custom method
+logger.exitAfterFlush = exitAfterFlush;
+
+// Handler global errors
+process.on('uncaughtException', (error, origin) => {
+	logger.error({
+		message: `UNCAUGHT EXCEPTION: ${error.message}`,
+		label: 'PROCESS',
+		error: error.stack,
+		origin: origin,
+	});
+});
+
+process.on('unhandledRejection', (reason, _promise) => {
+	const message =
+		reason instanceof Error ? reason.message : JSON.stringify(reason);
+	const stack = reason instanceof Error ? reason.stack : 'No stack available.';
+
+	logger.error({
+		message: `UNHANDLED REJECTION: ${message}`,
+		label: 'PROCESS',
+		error: stack,
+	});
+});
+
+export default logger;

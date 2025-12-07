@@ -1,0 +1,61 @@
+{
+	"compilerOptions": {
+		/* ---------------------------------------------------------
+		 * 1. LANGUAGE & ENVIRONMENT (Target Node.js Modern)
+		 * --------------------------------------------------------- */
+		"target": "ES2022" /* Target JS modern (support async/await top level, dll) */,
+		"module": "CommonJS" /* Outputnya tetep require() biar bot lama gak kaget */,
+		"moduleResolution": "Node" /* Cara Node nyari file */,
+		"lib": ["ES2022"] /* Library bawaan yang dipake */,
+
+		/* ---------------------------------------------------------
+		 * 2. OUTPUT & STRUCTURE (Penting buat Library)
+		 * --------------------------------------------------------- */
+		"outDir": "./dist" /* Hasil compile masuk ke folder dist */,
+		"rootDir": "./src" /* Sumber kode ada di src */,
+
+		"declaration": true /* 🔥 WAJIB: Bikin file .d.ts (Kamus Tipe Data) buat bot lu */,
+		"declarationMap": true /* Biar bisa "Go to Definition" dari bot ke core */,
+		"sourceMap": true /* Biar enak debugging (mapping dari JS balik ke TS) */,
+		"removeComments": true /* Bersihin komentar di hasil compile biar enteng */,
+
+		/* ---------------------------------------------------------
+		 * 3. STRICTNESS (Mode Ganteng/Strict)
+		 * --------------------------------------------------------- */
+		"strict": true /* Aktifin semua strict checking (No Pain No Gain) */,
+		"noImplicitAny": true /* Haram hukumnya ada variable 'any' ga jelas */,
+		"strictNullChecks": true /* Anti "Cannot read property of undefined" */,
+		"noImplicitReturns": true /* Pastiin fungsi selalu return sesuatu (atau void) */,
+		"noFallthroughCasesInSwitch": true /* Cek switch case biar gak bablas */,
+
+		/* ---------------------------------------------------------
+		 * 4. INTEROP & COMPATIBILITY
+		 * --------------------------------------------------------- */
+		"esModuleInterop": true /* Biar bisa import module CommonJS pake syntax 'import' */,
+		"allowSyntheticDefaultImports": true,
+		"allowJs": true,
+		"checkJs": false,
+		"resolveJsonModule": true /* Biar bisa: import config from './config.json' */,
+		"skipLibCheck": true /* Gak usah cek error di node_modules (biar compile cepet) */,
+		"forceConsistentCasingInFileNames": true /* Cek besar kecil nama file (Linux sensitive lho) */,
+
+		/* ---------------------------------------------------------
+		 * 5. PATH ALIASES (Biar import cantik)
+		 * --------------------------------------------------------- */
+		"baseUrl": ".",
+		"paths": {
+			"@src/*": ["src/*"],
+			"@managers/*": ["src/managers/*"],
+			"@utils/*": ["src/utils/*"],
+			"@database/*": ["src/database/*"],
+			"@middlewares/*": ["src/middlewares/*"],
+			"@structures/*": ["src/structures/*"]
+		}
+	},
+	"include": ["src/**/*"] /* Yang dicompile cuma folder src */,
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/*.test.ts"
+	] /* Jangan compile sampah */
+}
