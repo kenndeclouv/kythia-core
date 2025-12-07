@@ -4,7 +4,7 @@
  * @file src/managers/EventManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.1-beta
+ * @version 0.12.0-beta.1
  *
  * @description
  * Handles all Discord event listeners except InteractionCreate.
@@ -12,7 +12,12 @@
  */
 
 import type { Client } from 'discord.js';
-import type { KythiaContainer, KythiaAugmentedEventHandler, IEventManager, KythiaLogger } from '../types';
+import type {
+	KythiaContainer,
+	KythiaAugmentedEventHandler,
+	IEventManager,
+	KythiaLogger,
+} from '../types';
 
 export default class EventManager implements IEventManager {
 	public client: Client;

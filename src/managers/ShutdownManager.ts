@@ -4,7 +4,7 @@
  * @file src/managers/ShutdownManager.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.1-beta
+ * @version 0.12.0-beta.1
  *
  * @description
  * Handles graceful shutdown procedures including interval tracking,
@@ -13,7 +13,12 @@
 
 import exitHook from 'async-exit-hook';
 import type { Message } from 'discord.js';
-import type { KythiaClient, KythiaContainer, IShutdownManager, KythiaLogger } from '../types';
+import type {
+	KythiaClient,
+	KythiaContainer,
+	IShutdownManager,
+	KythiaLogger,
+} from '../types';
 
 export class ShutdownManager implements IShutdownManager {
 	client: KythiaClient;

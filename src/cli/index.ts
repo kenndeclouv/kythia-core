@@ -6,7 +6,7 @@
  * @file src/cli/index.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.1-beta
+ * @version 0.12.0-beta.1
  *
  * @description
  * The main bootstrap entry point for the Kythia CLI.

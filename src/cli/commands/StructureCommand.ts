@@ -4,7 +4,7 @@
  * @file src/cli/commands/StructureCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.11.1-beta
+ * @version 0.12.0-beta.1
  *
  * @description
  * Generates a markdown tree representation of the entire project directory.
