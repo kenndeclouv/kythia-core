@@ -44,7 +44,7 @@ export interface IInteractionManager {
 	KythiaVoter: any;
 
 	// Helpers
-	isTeam: (userId: string) => boolean;
+	isTeam: (userId: string) => Promise<boolean>;
 	isOwner: (userId: string) => boolean;
 
 	initialize(): void;

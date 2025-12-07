@@ -133,10 +133,10 @@ export default class AddonManager implements IAddonManager {
 	registerAutocompleteHandler(
 		commandName: string,
 		handler: KythiaAutocompleteHandler,
-	) {
+	): void {
 		if (this.autocompleteHandlers.has(commandName)) {
 			this.logger.warn(
-				`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists and will be overwritten.`,
+				`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists.`,
 			);
 		}
 		this.autocompleteHandlers.set(commandName, handler);
@@ -853,6 +853,7 @@ export default class AddonManager implements IAddonManager {
 				!item.name.startsWith('_')
 			) {
 				let commandModule = require(itemPath);
+				if (commandModule.default) commandModule = commandModule.default;
 				let isClass = false;
 				if (this._isBaseCommandClass(commandModule)) {
 					commandModule = this._instantiateBaseCommand(commandModule);
@@ -912,6 +913,9 @@ export default class AddonManager implements IAddonManager {
 						commandNamesSet.add(name);
 
 						this.client.commands.set(name, commandModule);
+					}
+					if (typeof commandModule.autocomplete === 'function') {
+						this.registerAutocompleteHandler(name, commandModule.autocomplete);
 					}
 					commandDataForDeployment.push(builder.toJSON());
 					summarySlash = {

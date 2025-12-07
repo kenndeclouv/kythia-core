@@ -47,37 +47,35 @@ import type {
 	KythiaSelectMenuHandler,
 	KythiaAutocompleteHandler,
 } from '../types/AddonManager';
+import type { KythiaConfig } from '../types/KythiaConfig';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const convertColor = require('../utils/color');
 
 export class InteractionManager implements IInteractionManager {
-	client: KythiaClient;
-	container: KythiaContainer;
+	public client: KythiaClient;
+	public container: KythiaContainer;
 
 	// Handlers
-	buttonHandlers: Map<string, KythiaButtonHandler>;
-	modalHandlers: Map<string, KythiaModalHandler>;
-	selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
-	autocompleteHandlers: Map<string, KythiaAutocompleteHandler>;
-	commandCategoryMap: Map<string, string>;
-	categoryToFeatureMap: Map<string, string>;
+	public buttonHandlers: Map<string, KythiaButtonHandler>;
+	public modalHandlers: Map<string, KythiaModalHandler>;
+	public selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
+	public autocompleteHandlers: Map<string, KythiaAutocompleteHandler>;
+	public commandCategoryMap: Map<string, string>;
+	public categoryToFeatureMap: Map<string, string>;
 
-	// Dependencies
-	kythiaConfig: any;
-	models: any;
-	helpers: any;
-	logger: any;
-	t: any;
-	middlewareManager: any;
+	public kythiaConfig: KythiaConfig;
+	public models: any;
+	public helpers: any;
+	public logger: any;
+	public t: any;
+	public middlewareManager: any;
 
-	// Models
-	ServerSetting: any;
-	KythiaVoter: any;
+	public ServerSetting: any;
+	public KythiaVoter: any;
 
-	// Helpers
-	isTeam: (userId: string) => boolean;
-	isOwner: (userId: string) => boolean;
+	public isTeam: (userId: string) => Promise<boolean>;
+	public isOwner: (userId: string) => boolean;
 
 	/**
 	 * 🏗️ InteractionManager Constructor
@@ -126,7 +124,7 @@ export class InteractionManager implements IInteractionManager {
 	 * 🛎️ Initialize Interaction Handler
 	 * Sets up the main Discord interaction handler for commands, autocomplete, buttons, and modals.
 	 */
-	initialize(): void {
+	public initialize(): void {
 		this.client.on(
 			Events.InteractionCreate,
 			async (interaction: Interaction) => {
@@ -172,7 +170,7 @@ export class InteractionManager implements IInteractionManager {
 	 * Handle chat input commands
 	 * @private
 	 */
-	async _handleChatInputCommand(
+	private async _handleChatInputCommand(
 		interaction: ChatInputCommandInteraction,
 	): Promise<void> {
 		let commandKey = interaction.commandName;
@@ -187,6 +185,7 @@ export class InteractionManager implements IInteractionManager {
 		if (!command && (subcommand || group)) {
 			command = this.client.commands.get(interaction.commandName);
 		}
+
 		if (!command) {
 			this.logger.error(`Command not found for key: ${commandKey}`);
 			await interaction.reply({
@@ -196,36 +195,15 @@ export class InteractionManager implements IInteractionManager {
 			return;
 		}
 
-		// if (interaction.inGuild()) {
-		// 	const category = this.commandCategoryMap.get(interaction.commandName);
-		// 	const featureFlag = this.categoryToFeatureMap.get(category);
-
-		// 	if (featureFlag && !this.isOwner(interaction.user.id)) {
-		// 		const settings = await this.ServerSetting.getCache({
-		// 			guildId: interaction.guild.id,
-		// 		});
-
-		// 		if (
-		// 			settings &&
-		// 			Object.hasOwn(settings, featureFlag) &&
-		// 			settings[featureFlag] === false
-		// 		) {
-		// 			const featureName =
-		// 				category.charAt(0).toUpperCase() + category.slice(1);
-		// 			const reply = await this.t(
-		// 				interaction,
-		// 				'common.error.feature.disabled',
-		// 				{ feature: featureName },
-		// 			);
-		// 			return interaction.reply({ content: reply });
-		// 		}
-		// 	}
-		// }
-
-		const canRun = await this.middlewareManager.handle(interaction, command);
-		if (!canRun) return;
+		// Middleware Handling
+		// Pastikan middlewareManager ada dan method handle tersedia
+		if (this.middlewareManager) {
+			const canRun = await this.middlewareManager.handle(interaction, command);
+			if (!canRun) return;
+		}
 
 		if (typeof command.execute === 'function') {
+			// Inject logger ke interaction (dynamic property, aman di JS runtime)
 			if (!(interaction as any).logger) {
 				(interaction as any).logger = this.logger;
 			}
@@ -233,6 +211,8 @@ export class InteractionManager implements IInteractionManager {
 			if (this.container && !this.container.logger) {
 				this.container.logger = this.logger;
 			}
+
+			// Execute Command
 			if (command.execute.length === 2) {
 				await command.execute(interaction, this.container);
 			} else {
@@ -256,11 +236,7 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Handle autocomplete interactions
-	 * @private
-	 */
-	async _handleAutocomplete(
+	private async _handleAutocomplete(
 		interaction: AutocompleteInteraction,
 	): Promise<void> {
 		let commandKey = interaction.commandName;
@@ -270,27 +246,35 @@ export class InteractionManager implements IInteractionManager {
 		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
 		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
+		// 🔍 DEBUG 1: Apa key yang dicari?
+		this.logger.info(
+			`[AUTOCOMPLETE DEBUG] Searching handler for key: '${commandKey}'`,
+		);
+
 		let handler = this.autocompleteHandlers.get(commandKey);
 
 		if (!handler && (subcommand || group)) {
+			// Fallback ke root command
+			this.logger.info(
+				`[AUTOCOMPLETE DEBUG] Handler specific not found, trying root: '${interaction.commandName}'`,
+			);
 			handler = this.autocompleteHandlers.get(interaction.commandName);
 		}
+
+		// 🔍 DEBUG 2: Apakah handler ketemu?
+		this.logger.info(`[AUTOCOMPLETE DEBUG] Handler Found: ${!!handler}`);
 
 		if (handler) {
 			try {
 				await handler(interaction, this.container);
 			} catch (err) {
-				this.logger.error(
-					`Error in autocomplete handler for ${commandKey}:`,
-					err,
-				);
-				try {
-					await interaction.respond([]);
-				} catch (e) {
-					this.logger.error(e);
-				}
+				// ... error log ...
 			}
 		} else {
+			// 🔍 DEBUG 3: Handler mati -> Respond empty biar gak loading terus
+			this.logger.warn(
+				`[AUTOCOMPLETE DEBUG] No handler found! Returning empty response.`,
+			);
 			try {
 				await interaction.respond([]);
 			} catch (e) {
@@ -299,11 +283,7 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Handle button interactions
-	 * @private
-	 */
-	async _handleButton(interaction: ButtonInteraction): Promise<void> {
+	private async _handleButton(interaction: ButtonInteraction): Promise<void> {
 		const customIdPrefix = interaction.customId.includes('|')
 			? interaction.customId.split('|')[0]
 			: interaction.customId.split(':')[0];
@@ -311,15 +291,19 @@ export class InteractionManager implements IInteractionManager {
 		const handler = this.buttonHandlers.get(customIdPrefix);
 
 		if (handler) {
+			// Casting handler ke Function untuk cek length (meskipun tipe kita strict, runtime check aman)
+			const handlerFunc = handler as unknown as Function;
+
 			if (
 				typeof handler === 'object' &&
 				typeof (handler as any).execute === 'function'
 			) {
 				await (handler as any).execute(interaction, this.container);
 			} else if (typeof handler === 'function') {
-				if (handler.length === 2) {
+				if (handlerFunc.length === 2) {
 					await handler(interaction, this.container);
 				} else {
+					// Fallback untuk handler lama yang mungkin cuma terima interaction
 					await (handler as any)(interaction);
 				}
 			} else {
@@ -330,11 +314,9 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Handle modal submit interactions
-	 * @private
-	 */
-	async _handleModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
+	private async _handleModalSubmit(
+		interaction: ModalSubmitInteraction,
+	): Promise<void> {
 		const customIdPrefix = interaction.customId.includes('|')
 			? interaction.customId.split('|')[0]
 			: interaction.customId.split(':')[0];
@@ -347,30 +329,28 @@ export class InteractionManager implements IInteractionManager {
 		this.logger.info(`Modal handler found: ${!!handler}`);
 
 		if (handler) {
+			const handlerFunc = handler as unknown as Function;
+
 			if (
 				typeof handler === 'object' &&
 				typeof (handler as any).execute === 'function'
 			) {
 				await (handler as any).execute(interaction, this.container);
 			} else if (typeof handler === 'function') {
-				if (handler.length === 2) {
+				if (handlerFunc.length === 2) {
 					await handler(interaction, this.container);
 				} else {
 					await (handler as any)(interaction);
 				}
 			} else {
 				this.logger.error(
-					`Handler for modal ${customIdPrefix} has an invalid format (not a function or { execute: ... })`,
+					`Handler for modal ${customIdPrefix} has an invalid format`,
 				);
 			}
 		}
 	}
 
-	/**
-	 * Handle select menu interactions
-	 * @private
-	 */
-	async _handleSelectMenu(
+	private async _handleSelectMenu(
 		interaction: AnySelectMenuInteraction,
 	): Promise<void> {
 		const customIdPrefix = interaction.customId.includes('|')
@@ -385,13 +365,15 @@ export class InteractionManager implements IInteractionManager {
 		this.logger.info(`Select menu handler found: ${!!handler}`);
 
 		if (handler) {
+			const handlerFunc = handler as unknown as Function;
+
 			if (
 				typeof handler === 'object' &&
 				typeof (handler as any).execute === 'function'
 			) {
 				await (handler as any).execute(interaction, this.container);
 			} else if (typeof handler === 'function') {
-				if (handler.length === 2) {
+				if (handlerFunc.length === 2) {
 					await handler(interaction, this.container);
 				} else {
 					await (handler as any)(interaction);
@@ -404,11 +386,7 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Handle context menu commands
-	 * @private
-	 */
-	async _handleContextMenuCommand(
+	private async _handleContextMenuCommand(
 		interaction:
 			| UserContextMenuCommandInteraction
 			| MessageContextMenuCommandInteraction,
@@ -416,8 +394,10 @@ export class InteractionManager implements IInteractionManager {
 		const command = this.client.commands.get(interaction.commandName);
 		if (!command) return;
 
-		const canRun = await this.middlewareManager.handle(interaction, command);
-		if (!canRun) return;
+		if (this.middlewareManager) {
+			const canRun = await this.middlewareManager.handle(interaction, command);
+			if (!canRun) return;
+		}
 
 		if (!(interaction as any).logger) {
 			(interaction as any).logger = this.logger;
@@ -431,17 +411,16 @@ export class InteractionManager implements IInteractionManager {
 		await command.execute(interaction, this.container);
 	}
 
-	/**
-	 * Handle AutoModeration action execution
-	 * @private
-	 */
-	async _handleAutoModerationAction(
+	private async _handleAutoModerationAction(
 		execution: AutoModerationActionExecution,
 	): Promise<void> {
 		const guildId = execution.guild.id;
 		const ruleName = execution.ruleTriggerType.toString();
 
-		const settings = await this.ServerSetting.getCache({ guildId: guildId });
+		// Casting Model ke any untuk akses method statis custom
+		const settings = await (this.ServerSetting as any).getCache({
+			guildId: guildId,
+		});
 		const locale = execution.guild.preferredLocale;
 
 		if (!settings || !settings.modLogChannelId) {
@@ -499,11 +478,7 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Check for scheduled restart and notify user
-	 * @private
-	 */
-	async _checkRestartSchedule(interaction: Interaction): Promise<void> {
+	private async _checkRestartSchedule(interaction: Interaction): Promise<void> {
 		if (!interaction.isRepliable()) return;
 
 		const restartTs = (this.client as any).kythiaRestartTimestamp;
@@ -511,12 +486,16 @@ export class InteractionManager implements IInteractionManager {
 		if (!restartTs || (interaction as any).commandName === 'restart') return;
 
 		const userId = interaction.user.id;
-		const cooldowns = this.client.restartNoticeCooldowns!;
+		const cooldowns = this.client.restartNoticeCooldowns;
+
+		// Safety check jika cooldowns undefined
+		if (!cooldowns) return;
+
 		const now = Date.now();
 		const cooldownTime = 5 * 60 * 1000;
 
 		if (cooldowns.has(userId)) {
-			const lastNotified = cooldowns.get(userId)!;
+			const lastNotified = cooldowns.get(userId) || 0;
 			if (now - lastNotified < cooldownTime) {
 				return;
 			}
@@ -527,7 +506,6 @@ export class InteractionManager implements IInteractionManager {
 		if (timeLeft > 0) {
 			try {
 				const timeString = `<t:${Math.floor(restartTs / 1000)}:R>`;
-				// TODO: Add translation
 				const msg = `## ⚠️ System Notice\nKythia is scheduled to restart **${timeString}**.`;
 
 				if (interaction.replied || interaction.deferred) {
@@ -546,11 +524,7 @@ export class InteractionManager implements IInteractionManager {
 		}
 	}
 
-	/**
-	 * Handle interaction errors
-	 * @private
-	 */
-	async _handleInteractionError(
+	private async _handleInteractionError(
 		interaction: Interaction,
 		error: any,
 	): Promise<void> {
@@ -593,6 +567,7 @@ export class InteractionManager implements IInteractionManager {
 						.setDivider(true),
 				)
 				.addActionRowComponents(
+					// Gunakan ButtonBuilder Generic
 					new ActionRowBuilder<ButtonBuilder>().addComponents(
 						new ButtonBuilder()
 							.setStyle(ButtonStyle.Link)

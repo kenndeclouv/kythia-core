@@ -53,7 +53,7 @@ export default function kythiaClient(): IKythiaClient {
 			},
 
 			GuildMemberManager: {
-				maxSize: 200,
+				maxSize: 2000,
 				keepOverLimit: (member) =>
 					(member.client.user && member.id === member.client.user.id) ||
 					(member.guild && member.id === member.guild.ownerId) ||
@@ -62,7 +62,7 @@ export default function kythiaClient(): IKythiaClient {
 			},
 
 			UserManager: {
-				maxSize: 1000,
+				maxSize: 20000,
 				keepOverLimit: (user) => user.id === user.client.user.id,
 			},
 		}),
