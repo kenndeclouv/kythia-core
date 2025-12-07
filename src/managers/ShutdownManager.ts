@@ -13,14 +13,12 @@
 
 import exitHook from 'async-exit-hook';
 import type { Message } from 'discord.js';
-import type { KythiaClient } from '../types/KythiaClient';
-import type { KythiaContainer } from '../types/KythiaContainer';
-import type { IShutdownManager } from '../types/ShutdownManager';
+import type { KythiaClient, KythiaContainer, IShutdownManager, KythiaLogger } from '../types';
 
 export class ShutdownManager implements IShutdownManager {
 	client: KythiaClient;
 	container: KythiaContainer;
-	logger: any;
+	logger: KythiaLogger;
 	private _activeIntervals: Set<NodeJS.Timeout>;
 	private _messagesWithActiveCollectors: Set<Message>;
 	private _collectorPatched: boolean;
