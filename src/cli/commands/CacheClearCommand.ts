@@ -4,7 +4,7 @@
  * @file src/cli/commands/CacheClearCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Interactive utility to flush Redis cache. Supports intelligent handling of
@@ -99,9 +99,9 @@ export default class CacheClearCommand extends Command {
 
 		const confirm = await askQuestion(
 			pc.bgRed(pc.white(' DANGER ')) +
-				pc.yellow(
-					` Are you sure you want to FLUSHALL ${targets.length} instance(s)? (y/n): `,
-				),
+			pc.yellow(
+				` Are you sure you want to FLUSHALL ${targets.length} instance(s)? (y/n): `,
+			),
 		);
 
 		if (confirm.toLowerCase() !== 'y' && confirm.toLowerCase() !== 'yes') {

@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,
@@ -249,7 +249,7 @@ export class InteractionManager implements IInteractionManager {
 		if (handler) {
 			try {
 				await handler(interaction, this.container);
-			} catch (_e) {}
+			} catch (_e) { }
 		} else {
 			try {
 				await interaction.respond([]);
@@ -589,7 +589,7 @@ export class InteractionManager implements IInteractionManager {
 					.setColor('Red')
 					.setDescription(
 						`## ❌ Error at ${interaction.user.tag}\n` +
-							`\`\`\`${error.stack}\`\`\``,
+						`\`\`\`${error.stack}\`\`\``,
 					)
 					.setFooter({
 						text: interaction.guild

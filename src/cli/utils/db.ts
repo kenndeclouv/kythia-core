@@ -4,7 +4,7 @@
  * @file src/cli/utils/db.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Initializes the database connection and migration engine (Umzug) specifically
@@ -84,14 +84,14 @@ const umzugLogger = {
 			if (event.event === 'migrated') {
 				console.log(
 					pc.green(`✅ Migrated:  ${event.name} `) +
-						pc.gray(`(${event.durationSeconds}s)`),
+					pc.gray(`(${event.durationSeconds}s)`),
 				);
 			} else if (event.event === 'reverting') {
 				console.log(pc.yellow(`↩️ Reverting: ${event.name}`));
 			} else if (event.event === 'reverted') {
 				console.log(
 					pc.red(`❌ Reverted:  ${event.name} `) +
-						pc.gray(`(${event.durationSeconds}s)`),
+					pc.gray(`(${event.durationSeconds}s)`),
 				);
 			}
 		} else {

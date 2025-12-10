@@ -4,7 +4,7 @@
  * @file src/database/KythiaMigrator.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Scans 'addons' folder for migration files and executes them using Umzug.

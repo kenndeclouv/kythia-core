@@ -4,7 +4,7 @@
  * @file src/managers/ShutdownManager.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Handles graceful shutdown procedures including interval tracking,
@@ -169,7 +169,7 @@ export class ShutdownManager implements IShutdownManager {
 							const rawComponents = msg.components.map((c) => c.toJSON());
 							const disabledComponents = this.disableRecursively(rawComponents);
 							editPromises.push(
-								msg.edit({ components: disabledComponents }).catch(() => {}),
+								msg.edit({ components: disabledComponents }).catch(() => { }),
 							);
 						} catch (error) {
 							this.logger.error(error);

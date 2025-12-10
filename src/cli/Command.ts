@@ -4,7 +4,7 @@
  * @file src/cli/Command.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * The base class for all Kythia CLI commands. It enforces a standard structure

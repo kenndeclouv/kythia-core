@@ -4,7 +4,7 @@
  * @file src/Kythia.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * The heart of the application lifecycle. This class acts as the central
@@ -430,7 +430,7 @@ class Kythia {
 				clc.cyan('Created by kenndeclouv'),
 				clc.cyan('Discord Support: ') + clc.underline('https://dsc.gg/kythia'),
 				clc.cyan('Official Documentation: ') +
-					clc.underline('https://kythia.me'),
+				clc.underline('https://kythia.me'),
 				'',
 				clc.cyanBright(`Kythia version: ${version}`),
 				'',

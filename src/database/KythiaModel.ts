@@ -4,7 +4,7 @@
  * @file src/database/KythiaModel.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.0-beta.1
+ * @version 0.12.1-beta
  *
  * @description
  * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
@@ -411,24 +411,18 @@ export class KythiaModel<
 					);
 				} else if (this.isShardMode) {
 					this.logger.error(
-						`❌ [REDIS][SHARD] ${
-							this.redisErrorTimestamps.length
-						} consecutive errors in ${
-							REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
-						}s. SHARD MODE: Disabling cache (NO fallback), all queries go to DB. (Last error: ${
-							err?.message
+						`❌ [REDIS][SHARD] ${this.redisErrorTimestamps.length
+						} consecutive errors in ${REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
+						}s. SHARD MODE: Disabling cache (NO fallback), all queries go to DB. (Last error: ${err?.message
 						})`,
 					);
 					this.isRedisConnected = false;
 					this._scheduleReconnect();
 				} else {
 					this.logger.error(
-						`❌ [REDIS] ${
-							this.redisErrorTimestamps.length
-						} consecutive errors in ${
-							REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
-						}s. All Redis exhausted, fallback to In-Memory Cache! (Last error: ${
-							err?.message
+						`❌ [REDIS] ${this.redisErrorTimestamps.length
+						} consecutive errors in ${REDIS_ERROR_TOLERANCE_INTERVAL_MS / 1000
+						}s. All Redis exhausted, fallback to In-Memory Cache! (Last error: ${err?.message
 						})`,
 					);
 					this.isRedisConnected = false;
@@ -557,10 +551,8 @@ export class KythiaModel<
 		}
 
 		this.logger.info(
-			`[REDIS][INIT] Connecting to Redis fallback #${
-				this._redisCurrentIndex + 1
-			}/${this._redisFallbackURLs.length}: ${
-				typeof opt === 'string' ? opt : redisOpt.url || '(object)'
+			`[REDIS][INIT] Connecting to Redis fallback #${this._redisCurrentIndex + 1
+			}/${this._redisFallbackURLs.length}: ${typeof opt === 'string' ? opt : redisOpt.url || '(object)'
 			}`,
 		);
 
@@ -579,16 +571,14 @@ export class KythiaModel<
 		return (times: number) => {
 			if (times > 5) {
 				this.logger.error(
-					`❌ [REDIS] Could not connect after ${times - 1} retries for Redis #${
-						this._redisCurrentIndex + 1
+					`❌ [REDIS] Could not connect after ${times - 1} retries for Redis #${this._redisCurrentIndex + 1
 					}.`,
 				);
 				return null;
 			}
 			const delay = Math.min(times * 500, 2000);
 			this.logger.warn(
-				`🟠 [REDIS] Connection failed for Redis #${
-					this._redisCurrentIndex + 1
+				`🟠 [REDIS] Connection failed for Redis #${this._redisCurrentIndex + 1
 				}. Retrying in ${delay}ms (Attempt ${times})...`,
 			);
 			return delay;
@@ -655,8 +645,7 @@ export class KythiaModel<
 			this._redisFailedIndexes.add(this._redisCurrentIndex);
 
 			this.logger.warn(
-				`[REDIS] Connection #${
-					this._redisCurrentIndex + 1
+				`[REDIS] Connection #${this._redisCurrentIndex + 1
 				} closed. Attempting immediate failover...`,
 			);
 			const triedFailover = this._tryRedisFailover();
@@ -975,8 +964,7 @@ export class KythiaModel<
 
 			if (keysToDelete && keysToDelete.length > 0) {
 				this.logger.info(
-					`🎯 [SNIPER] Invalidating ${
-						keysToDelete.length
+					`🎯 [SNIPER] Invalidating ${keysToDelete.length
 					} keys for tags: ${tags.join(', ')}`,
 				);
 
@@ -1204,8 +1192,7 @@ export class KythiaModel<
 					const tags = [`${this.name}`];
 					if (record)
 						tags.push(
-							`${this.name}:${this.primaryKeyAttribute}:${
-								(record as any)[this.primaryKeyAttribute]
+							`${this.name}:${this.primaryKeyAttribute}:${(record as any)[this.primaryKeyAttribute]
 							}`,
 						);
 
@@ -1391,8 +1378,7 @@ export class KythiaModel<
 					} else {
 						const tags = [
 							`${this.name}`,
-							`${this.name}:${this.primaryKeyAttribute}:${
-								instance[this.primaryKeyAttribute]
+							`${this.name}:${this.primaryKeyAttribute}:${instance[this.primaryKeyAttribute]
 							}`,
 						];
 						await this.setCacheEntry(cacheKey, instance, undefined, tags);
@@ -1405,8 +1391,7 @@ export class KythiaModel<
 
 					const tags = [
 						`${this.name}`,
-						`${this.name}:${this.primaryKeyAttribute}:${
-							newInstance[this.primaryKeyAttribute]
+						`${this.name}:${this.primaryKeyAttribute}:${newInstance[this.primaryKeyAttribute]
 						}`,
 					];
 					await this.setCacheEntry(cacheKey, newInstance, undefined, tags);
