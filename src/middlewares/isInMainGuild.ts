@@ -10,8 +10,7 @@ import {
 	type Interaction,
 } from 'discord.js';
 import type { KythiaMiddleware, KythiaContainer } from '../types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const convertColor = require('../utils/color');
+import { convertColor } from '../utils/color';
 
 const isInMainGuild: KythiaMiddleware = {
 	name: 'isInMainGuild',

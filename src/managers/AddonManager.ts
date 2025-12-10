@@ -396,7 +396,6 @@ export default class AddonManager implements IAddonManager {
 
 			const loadedCommandsSummary: any[] = [];
 			const loadedEventsSummary: any[] = [];
-			const loadedRegisterSummary: any[] = [];
 
 			const commandsPath = path.join(addonDir, 'commands');
 			if (fs.existsSync(commandsPath)) {
@@ -417,23 +416,24 @@ export default class AddonManager implements IAddonManager {
 				}
 			}
 
+			const componentSummary = await this._loadAddonComponents(addonDir);
+
 			const registerPath = path.join(addonDir, 'register.js');
+			const loadedRegisterSummary: string[] = [];
+
 			if (fs.existsSync(registerPath)) {
 				try {
+					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const registration = require(registerPath);
-					if (typeof registration.initialize === 'function') {
-						const registrationSummary =
-							await registration.initialize(kythiaInstance);
-						if (
-							Array.isArray(registrationSummary) &&
-							registrationSummary.length > 0
-						) {
-							loadedRegisterSummary.push(...registrationSummary);
-						}
+					const regModule = registration.default || registration;
+
+					if (typeof regModule.initialize === 'function') {
+						const res = await regModule.initialize(kythiaInstance);
+						if (Array.isArray(res)) loadedRegisterSummary.push(...res);
 					}
 				} catch (error) {
 					this.logger.error(
-						`❌ Failed to register components for [${addon.name}]:`,
+						`❌ Failed to load register.js for [${addon.name}]:`,
 						error,
 					);
 				}
@@ -469,13 +469,82 @@ export default class AddonManager implements IAddonManager {
 				version: addonVersion,
 				commands: loadedCommandsSummary,
 				events: loadedEventsSummary,
-				register: loadedRegisterSummary,
+				register: [...componentSummary, ...loadedRegisterSummary],
 				hasLocales: hasLocales,
 			});
 		}
 
 		this._logAddonSummary(addonSummaries);
 		return commandDataForDeployment;
+	}
+
+	private async _loadAddonComponents(addonDir: string): Promise<string[]> {
+		const summary: string[] = [];
+
+		const componentTypes = [
+			{
+				folder: 'buttons',
+				register: this.registerButtonHandler.bind(this),
+				name: 'Buttons',
+			},
+			{
+				folder: 'modals',
+				register: this.registerModalHandler.bind(this),
+				name: 'Modals',
+			},
+			{
+				folder: 'select_menus',
+				register: this.registerSelectMenuHandler.bind(this),
+				name: 'Select Menus',
+			},
+		];
+
+		for (const type of componentTypes) {
+			const dirPath = path.join(addonDir, type.folder);
+
+			if (!fs.existsSync(dirPath)) continue;
+
+			const files = fs
+				.readdirSync(dirPath)
+				.filter(
+					(f) =>
+						(f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
+				);
+
+			let count = 0;
+
+			for (const file of files) {
+				try {
+					const filePath = path.join(dirPath, file);
+					// eslint-disable-next-line @typescript-eslint/no-var-requires
+					let module = require(filePath);
+					if (module.default) module = module.default;
+
+					if (typeof module.execute !== 'function') {
+						this.logger.warn(
+							`⚠️ Skipped component ${file}: Missing 'execute' function.`,
+						);
+						continue;
+					}
+
+					const id = module.customId || path.parse(file).name;
+
+					type.register(id, module.execute);
+					count++;
+				} catch (err) {
+					this.logger.error(
+						`❌ Failed to load ${type.name.slice(0, -1)} ${file}:`,
+						err,
+					);
+				}
+			}
+
+			if (count > 0) {
+				summary.push(`   └─ ✅ Auto-loaded ${count} ${type.name}`);
+			}
+		}
+
+		return summary;
 	}
 
 	/**

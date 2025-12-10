@@ -49,14 +49,12 @@ import type {
 } from '../types/AddonManager';
 import type { KythiaConfig } from '../types/KythiaConfig';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const convertColor = require('../utils/color');
+import { convertColor } from '../utils';
 
 export class InteractionManager implements IInteractionManager {
 	public client: KythiaClient;
 	public container: KythiaContainer;
 
-	// Handlers
 	public buttonHandlers: Map<string, KythiaButtonHandler>;
 	public modalHandlers: Map<string, KythiaModalHandler>;
 	public selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
@@ -195,15 +193,12 @@ export class InteractionManager implements IInteractionManager {
 			return;
 		}
 
-		// Middleware Handling
-		// Pastikan middlewareManager ada dan method handle tersedia
 		if (this.middlewareManager) {
 			const canRun = await this.middlewareManager.handle(interaction, command);
 			if (!canRun) return;
 		}
 
 		if (typeof command.execute === 'function') {
-			// Inject logger ke interaction (dynamic property, aman di JS runtime)
 			if (!(interaction as any).logger) {
 				(interaction as any).logger = this.logger;
 			}
@@ -212,7 +207,6 @@ export class InteractionManager implements IInteractionManager {
 				this.container.logger = this.logger;
 			}
 
-			// Execute Command
 			if (command.execute.length === 2) {
 				await command.execute(interaction, this.container);
 			} else {
@@ -246,35 +240,17 @@ export class InteractionManager implements IInteractionManager {
 		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
 		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
-		// 🔍 DEBUG 1: Apa key yang dicari?
-		this.logger.info(
-			`[AUTOCOMPLETE DEBUG] Searching handler for key: '${commandKey}'`,
-		);
-
 		let handler = this.autocompleteHandlers.get(commandKey);
 
 		if (!handler && (subcommand || group)) {
-			// Fallback ke root command
-			this.logger.info(
-				`[AUTOCOMPLETE DEBUG] Handler specific not found, trying root: '${interaction.commandName}'`,
-			);
 			handler = this.autocompleteHandlers.get(interaction.commandName);
 		}
-
-		// 🔍 DEBUG 2: Apakah handler ketemu?
-		this.logger.info(`[AUTOCOMPLETE DEBUG] Handler Found: ${!!handler}`);
 
 		if (handler) {
 			try {
 				await handler(interaction, this.container);
-			} catch (err) {
-				// ... error log ...
-			}
+			} catch (_e) {}
 		} else {
-			// 🔍 DEBUG 3: Handler mati -> Respond empty biar gak loading terus
-			this.logger.warn(
-				`[AUTOCOMPLETE DEBUG] No handler found! Returning empty response.`,
-			);
 			try {
 				await interaction.respond([]);
 			} catch (e) {
@@ -291,7 +267,6 @@ export class InteractionManager implements IInteractionManager {
 		const handler = this.buttonHandlers.get(customIdPrefix);
 
 		if (handler) {
-			// Casting handler ke Function untuk cek length (meskipun tipe kita strict, runtime check aman)
 			const handlerFunc = handler as unknown as Function;
 
 			if (
@@ -303,7 +278,6 @@ export class InteractionManager implements IInteractionManager {
 				if (handlerFunc.length === 2) {
 					await handler(interaction, this.container);
 				} else {
-					// Fallback untuk handler lama yang mungkin cuma terima interaction
 					await (handler as any)(interaction);
 				}
 			} else {
@@ -417,7 +391,6 @@ export class InteractionManager implements IInteractionManager {
 		const guildId = execution.guild.id;
 		const ruleName = execution.ruleTriggerType.toString();
 
-		// Casting Model ke any untuk akses method statis custom
 		const settings = await (this.ServerSetting as any).getCache({
 			guildId: guildId,
 		});
@@ -488,7 +461,6 @@ export class InteractionManager implements IInteractionManager {
 		const userId = interaction.user.id;
 		const cooldowns = this.client.restartNoticeCooldowns;
 
-		// Safety check jika cooldowns undefined
 		if (!cooldowns) return;
 
 		const now = Date.now();
@@ -506,7 +478,7 @@ export class InteractionManager implements IInteractionManager {
 		if (timeLeft > 0) {
 			try {
 				const timeString = `<t:${Math.floor(restartTs / 1000)}:R>`;
-				const msg = `## ⚠️ System Notice\nKythia is scheduled to restart **${timeString}**.`;
+				const msg = `## ⚠️ System Notice\nKythia is scheduled to restart **${timeString}**.\n-# Kythia is originally created by kenndeclouv`;
 
 				if (interaction.replied || interaction.deferred) {
 					await interaction.followUp({
@@ -567,7 +539,6 @@ export class InteractionManager implements IInteractionManager {
 						.setDivider(true),
 				)
 				.addActionRowComponents(
-					// Gunakan ButtonBuilder Generic
 					new ActionRowBuilder<ButtonBuilder>().addComponents(
 						new ButtonBuilder()
 							.setStyle(ButtonStyle.Link)

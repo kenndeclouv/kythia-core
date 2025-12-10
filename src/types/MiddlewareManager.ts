@@ -17,5 +17,8 @@ export interface KythiaMiddleware {
 export interface IMiddlewareManager {
 	middlewares: KythiaMiddleware[];
 	loadMiddlewares(): Promise<void>;
-	handle(interaction: Interaction, command: KythiaCommandModule): Promise<boolean>;
+	handle(
+		interaction: Interaction,
+		command: KythiaCommandModule,
+	): Promise<boolean>;
 }

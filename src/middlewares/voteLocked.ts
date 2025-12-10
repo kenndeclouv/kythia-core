@@ -10,8 +10,7 @@ import {
 	type Interaction,
 } from 'discord.js';
 import type { KythiaMiddleware, KythiaContainer } from '../types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const convertColor = require('../utils/color');
+import { convertColor } from '../utils/color';
 
 const voteLocked: KythiaMiddleware = {
 	name: 'voteLocked',
@@ -28,7 +27,9 @@ const voteLocked: KythiaMiddleware = {
 		const { kythiaConfig, t } = container;
 
 		// Ambil data voter sekali aja
-		const voter = await (KythiaVoter as any).getCache({ userId: interaction.user.id });
+		const voter = await (KythiaVoter as any).getCache({
+			userId: interaction.user.id,
+		});
 		const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
 
 		// Cek: Belum pernah vote ATAU vote terakhir udah expired (lebih dari 12 jam lalu)

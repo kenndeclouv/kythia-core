@@ -33,9 +33,9 @@ export default class MiddlewareManager {
 
 		const coreMiddlewarePath = path.join(__dirname, '..', 'middlewares');
 
-		this.logger.info(
-			`🔍 [Middleware] Loading Core Middlewares from: ${coreMiddlewarePath}`,
-		);
+		// this.logger.info(
+		// 	`🔍 [Middleware] Loading Core Middlewares from: ${coreMiddlewarePath}`,
+		// );
 
 		if (fs.existsSync(coreMiddlewarePath)) {
 			await this._loadFromPath(coreMiddlewarePath);
@@ -52,9 +52,9 @@ export default class MiddlewareManager {
 			fs.existsSync(userMiddlewarePath) &&
 			userMiddlewarePath !== coreMiddlewarePath
 		) {
-			this.logger.info(
-				`🔍 [Middleware] Loading User Middlewares from: ${userMiddlewarePath}`,
-			);
+			// this.logger.info(
+			// 	`🔍 [Middleware] Loading User Middlewares from: ${userMiddlewarePath}`,
+			// );
 			await this._loadFromPath(userMiddlewarePath);
 		}
 

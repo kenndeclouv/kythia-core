@@ -70,10 +70,10 @@ export default class TranslatorManager {
 					const existingData = this.locales.get(langCode);
 					const mergedData = this._deepMerge(existingData, newData);
 					this.locales.set(langCode, mergedData);
-					this.logger.debug(`倹 Merged locale: ${langCode} from ${dirPath}`);
+					this.logger.debug(`🌐 Merged locale: ${langCode} from ${dirPath}`);
 				} else {
 					this.locales.set(langCode, newData);
-					this.logger.info(`倹 Loaded New Language: ${langCode}`);
+					this.logger.info(`🌐 Loaded New Language: ${langCode}`);
 				}
 			} catch (err) {
 				this.logger.error(

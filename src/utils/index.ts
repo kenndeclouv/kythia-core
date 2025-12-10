@@ -1,4 +1,4 @@
-import convertColor from './color';
+import { convertColor } from './color';
 import * as formatter from './formatter';
 import logger from './logger';
 import loadDiscordHelpers from './discord';

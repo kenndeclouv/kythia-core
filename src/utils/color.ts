@@ -36,17 +36,17 @@ const discordColors: Record<string, number> = {
 	NotQuiteBlack: 0x23272a,
 };
 
-interface RGB {
+export interface RGB {
 	r: number;
 	g: number;
 	b: number;
 }
 
-type ColorInput = string | number | RGB;
-type ColorFormat = 'hex' | 'rgb' | 'decimal';
-type SourceFormat = ColorFormat | 'discord';
+export type ColorInput = string | number | RGB;
+export type ColorFormat = 'hex' | 'rgb' | 'decimal';
+export type SourceFormat = ColorFormat | 'discord';
 
-interface ConvertOptions {
+export interface ConvertOptions {
 	from: SourceFormat;
 	to: ColorFormat;
 }
@@ -54,7 +54,24 @@ interface ConvertOptions {
 /**
  * Converts a color between multiple representations.
  */
-export default function convertColor(
+export function convertColor(
+	input: ColorInput,
+	options: { from: SourceFormat; to: 'hex' },
+): string;
+export function convertColor(
+	input: ColorInput,
+	options: { from: SourceFormat; to: 'rgb' },
+): RGB;
+export function convertColor(
+	input: ColorInput,
+	options: { from: SourceFormat; to: 'decimal' },
+): number;
+export function convertColor(
+	input: ColorInput,
+	options: ConvertOptions,
+): string | number | RGB;
+
+export function convertColor(
 	input: ColorInput,
 	{ from, to }: ConvertOptions,
 ): string | number | RGB {
