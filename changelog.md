@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.1-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.0-beta.1...v0.12.1-beta) (2025-12-10)
+
+
+### ✨ Added
+
+* refactor addon component loading and update import styles and logging emojis ([d0ac3c8](https://github.com/kenndeclouv/kythia-core/commit/d0ac3c893fcaf24fd4c093095beba851a7f7d70b))
+
 ## [0.12.0-beta.1](https://github.com/kenndeclouv/kythia-core/compare/v0.12.0-beta...v0.12.0-beta.1) (2025-12-07)
 
 
