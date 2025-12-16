@@ -46,12 +46,8 @@ export default abstract class Command {
 			.command(this.signature)
 			.description(this.description)
 			.action((...args: any[]) => {
-				// Commander v7+ passes (arg1, arg2, options, commandObj)
-				// Kita perlu extrak options dan arguments dengan benar
-				const commandObj = args.pop(); // Commander object (terakhir)
-				const options = args.pop() || {}; // Options object (kedua terakhir)
+				const options = args.pop() || {};
 
-				// Sisanya adalah arguments
 				this.handle(options, ...args);
 			});
 
@@ -62,8 +58,6 @@ export default abstract class Command {
 	 * Configure additional options or arguments.
 	 * Override this method in child classes to add flags.
 	 */
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	public configure(cmd: CommanderCommand): void {
-		// Default: do nothing
-	}
+
+	public configure(_cmd: CommanderCommand): void {}
 }

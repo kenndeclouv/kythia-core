@@ -59,6 +59,7 @@ import KythiaClient from './KythiaClient';
 
 import type { Sequelize } from 'sequelize';
 import type Redis from 'ioredis';
+// import { TelemetryManager } from './managers/TelemetryManager';
 
 class Kythia {
 	public kythiaConfig: IKythiaConfig;
@@ -430,7 +431,7 @@ class Kythia {
 				clc.cyan('Created by kenndeclouv'),
 				clc.cyan('Discord Support: ') + clc.underline('https://dsc.gg/kythia'),
 				clc.cyan('Official Documentation: ') +
-				clc.underline('https://kythia.me'),
+					clc.underline('https://kythia.me'),
 				'',
 				clc.cyanBright(`Kythia version: ${version}`),
 				'',
@@ -507,6 +508,28 @@ class Kythia {
 		}
 
 		this._checkRequiredConfig();
+
+		// const telemetry = new TelemetryManager({
+		// 	licenseKey: this.kythiaConfig.licenseKey,
+		// 	// apiUrl: 'https://api.kythia.xyz',
+		// 	apiUrl: 'http://localhost:8000',
+		// 	logger: this.logger,
+		// 	version: version,
+		// 	config: this.kythiaConfig
+		// });
+
+		// const isLicenseValid = await telemetry.verify();
+
+		// if (!isLicenseValid) {
+		// 	this.logger.error('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+		// 	this.logger.error('🚫 ACCESS DENIED');
+		// 	this.logger.error('Your license key is missing, invalid, or expired.');
+		// 	this.logger.error('Please verify your license key in .env or contact support at:');
+		// 	this.logger.error('👉 https://dsc.gg/kythia');
+		// 	this.logger.error('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+
+		// 	process.exit(1);
+		// }
 
 		try {
 			const shouldDeploy = process.argv.includes('--deploy');

@@ -21,7 +21,10 @@
 			},
 			"complexity": {
 				"noThisInStatic": "off",
-				"noBannedTypes": "warn"
+				"noBannedTypes": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "off"
 			}
 		}
 	},

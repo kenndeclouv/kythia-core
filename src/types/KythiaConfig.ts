@@ -45,6 +45,7 @@ export interface KythiaConfigDb {
 	timezone: string;
 	redis?: KythiaRedisConfig;
 	redisCacheVersion: string;
+	useRedis?: boolean;
 }
 
 export interface BaseAddonConfig {
@@ -319,7 +320,8 @@ export interface KythiaConfigEmojis {
 }
 
 export interface KythiaConfig {
-	env: 'development' | 'production' | 'test'; // Enforce environment values
+	env: 'development' | 'production' | 'test' | 'local';
+	licenseKey: string;
 	version: string;
 	owner: KythiaConfigOwner;
 	sentry: KythiaConfigSentry;

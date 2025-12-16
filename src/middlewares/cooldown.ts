@@ -23,10 +23,10 @@ const cooldown: KythiaMiddleware = {
 		}
 
 		const now = Date.now();
-		const timestamps = client.cooldowns.get(command.name)!; // Pake ! karena barusan di-set
+		const timestamps = client.cooldowns.get(command.name); // Pake ! karena barusan di-set
 		const cooldownAmount = cooldownDuration * 1000;
 
-		if (timestamps.has(interaction.user.id)) {
+		if (timestamps?.has(interaction.user.id)) {
 			const expirationTime =
 				(timestamps.get(interaction.user.id) || 0) + cooldownAmount;
 
@@ -46,8 +46,8 @@ const cooldown: KythiaMiddleware = {
 			}
 		}
 
-		timestamps.set(interaction.user.id, now);
-		setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+		timestamps?.set(interaction.user.id, now);
+		setTimeout(() => timestamps?.delete(interaction.user.id), cooldownAmount);
 
 		return true;
 	},

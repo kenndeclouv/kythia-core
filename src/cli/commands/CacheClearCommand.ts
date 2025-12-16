@@ -99,9 +99,9 @@ export default class CacheClearCommand extends Command {
 
 		const confirm = await askQuestion(
 			pc.bgRed(pc.white(' DANGER ')) +
-			pc.yellow(
-				` Are you sure you want to FLUSHALL ${targets.length} instance(s)? (y/n): `,
-			),
+				pc.yellow(
+					` Are you sure you want to FLUSHALL ${targets.length} instance(s)? (y/n): `,
+				),
 		);
 
 		if (confirm.toLowerCase() !== 'y' && confirm.toLowerCase() !== 'yes') {

@@ -54,7 +54,7 @@ const createSequelizeInstance: CreateSequelizeInstance = (
 	const dbHost = dbConfig.host || process.env.DB_HOST;
 	const dbPort =
 		(dbConfig.port ? Number(dbConfig.port) : undefined) ||
-		(process.env.DB_PORT ? parseInt(process.env.DB_PORT) : undefined);
+		(process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined);
 
 	const dbSocket = (dbConfig as any).socketPath || process.env.DB_SOCKET_PATH;
 	const dbSsl = (dbConfig as any).ssl || process.env.DB_SSL;

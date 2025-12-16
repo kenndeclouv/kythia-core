@@ -193,11 +193,11 @@ export function convertColor(
 
 	switch (to) {
 		case 'hex':
-			return hex!;
+			return hex;
 		case 'rgb':
-			return rgb!;
+			return rgb;
 		case 'decimal':
-			return decimal!;
+			return decimal;
 		default:
 			throw new Error(`Invalid "to" color type: ${to}`);
 	}

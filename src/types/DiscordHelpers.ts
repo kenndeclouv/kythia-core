@@ -1,5 +1,3 @@
-import type { User, GuildMember } from 'discord.js';
-
 export interface DiscordHelpers {
 	isOwner(userId: string): boolean;
 	isTeam(userId: string): Promise<boolean>;

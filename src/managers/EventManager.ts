@@ -82,7 +82,10 @@ export default class EventManager implements IEventManager {
 		handler: KythiaAugmentedEventHandler,
 	): void {
 		if (this.eventHandlers.has(eventName)) {
-			const handlers = this.eventHandlers.get(eventName)!;
+			// WOI
+			const handlers = this.eventHandlers.get(
+				eventName,
+			) as KythiaAugmentedEventHandler[];
 			const index = handlers.indexOf(handler);
 			if (index > -1) {
 				handlers.splice(index, 1);

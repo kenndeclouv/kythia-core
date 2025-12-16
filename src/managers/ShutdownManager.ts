@@ -169,7 +169,7 @@ export class ShutdownManager implements IShutdownManager {
 							const rawComponents = msg.components.map((c) => c.toJSON());
 							const disabledComponents = this.disableRecursively(rawComponents);
 							editPromises.push(
-								msg.edit({ components: disabledComponents }).catch(() => { }),
+								msg.edit({ components: disabledComponents }).catch(() => {}),
 							);
 						} catch (error) {
 							this.logger.error(error);

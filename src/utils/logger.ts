@@ -47,6 +47,7 @@ try {
 	}
 } catch (e) {
 	console.warn('⚠️ Logger could not load kythia.config.js');
+	console.warn(e);
 	kythiaConfig = { env: 'development', settings: {} };
 }
 

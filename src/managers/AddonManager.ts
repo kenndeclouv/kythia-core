@@ -452,7 +452,7 @@ export default class AddonManager implements IAddonManager {
 							if (!this.eventHandlers.has(eventName)) {
 								this.eventHandlers.set(eventName, []);
 							}
-							this.eventHandlers.get(eventName)!.push(eventHandler);
+							this.eventHandlers.get(eventName)?.push(eventHandler);
 							loadedEventsSummary.push(eventName);
 						}
 					} catch (error) {

@@ -144,7 +144,7 @@ export default class MigrateCommand extends Command {
 
 				const answer = await promptYN(
 					pc.bgRed(pc.white(' DANGER ')) +
-					pc.yellow(' This will wipe ALL DATA. Are you sure? (y/n): '),
+						pc.yellow(' This will wipe ALL DATA. Are you sure? (y/n): '),
 				);
 				if (answer !== 'y' && answer !== 'yes') {
 					console.log(pc.cyan('Operation cancelled.'));
@@ -165,8 +165,8 @@ export default class MigrateCommand extends Command {
 				try {
 					await queryInterface.dropAllTables();
 
-					await queryInterface.dropTable('migrations').catch(() => { });
-					await queryInterface.dropTable('SequelizeMeta').catch(() => { });
+					await queryInterface.dropTable('migrations').catch(() => {});
+					await queryInterface.dropTable('SequelizeMeta').catch(() => {});
 
 					console.log(pc.green('✅ All tables dropped. Database is clean.'));
 				} catch (e: any) {

@@ -13,6 +13,5 @@ export interface IEventManager {
 // 2. Pake Interface itu di sini (Ganti 'any')
 export type KythiaAugmentedEventHandler = (
 	manager: IEventManager,
-	// biome-ignore lint/suspicious/noExplicitAny: discord dynamic event
 	...args: any[]
-) => Promise<boolean | undefined | void> | boolean | undefined | void;
+) => Promise<boolean | undefined | undefined> | boolean | undefined | undefined;

@@ -249,7 +249,7 @@ export class InteractionManager implements IInteractionManager {
 		if (handler) {
 			try {
 				await handler(interaction, this.container);
-			} catch (_e) { }
+			} catch (_e) {}
 		} else {
 			try {
 				await interaction.respond([]);
@@ -405,7 +405,7 @@ export class InteractionManager implements IInteractionManager {
 			.fetch(logChannelId)
 			.catch(() => null);
 
-		if (logChannel && logChannel.isTextBased()) {
+		if (logChannel?.isTextBased()) {
 			const embed = new EmbedBuilder()
 				.setColor('Red')
 				.setDescription(
@@ -589,7 +589,7 @@ export class InteractionManager implements IInteractionManager {
 					.setColor('Red')
 					.setDescription(
 						`## ❌ Error at ${interaction.user.tag}\n` +
-						`\`\`\`${error.stack}\`\`\``,
+							`\`\`\`${error.stack}\`\`\``,
 					)
 					.setFooter({
 						text: interaction.guild

@@ -84,14 +84,14 @@ const umzugLogger = {
 			if (event.event === 'migrated') {
 				console.log(
 					pc.green(`✅ Migrated:  ${event.name} `) +
-					pc.gray(`(${event.durationSeconds}s)`),
+						pc.gray(`(${event.durationSeconds}s)`),
 				);
 			} else if (event.event === 'reverting') {
 				console.log(pc.yellow(`↩️ Reverting: ${event.name}`));
 			} else if (event.event === 'reverted') {
 				console.log(
 					pc.red(`❌ Reverted:  ${event.name} `) +
-					pc.gray(`(${event.durationSeconds}s)`),
+						pc.gray(`(${event.durationSeconds}s)`),
 				);
 			}
 		} else {
