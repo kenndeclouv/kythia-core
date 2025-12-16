@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.2-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.1-beta...v0.12.2-beta) (2025-12-16)
+
+
+### ✨ Added
+
+* Introduce DI type generation CLI command and enhance Redis configuration with disable option. ([c501717](https://github.com/kenndeclouv/kythia-core/commit/c5017171bbafa3b15971ebde7f3af864a08796a8))
+
 ### [0.12.1-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.0-beta.1...v0.12.1-beta) (2025-12-10)
 
 
