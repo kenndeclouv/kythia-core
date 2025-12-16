@@ -4,7 +4,7 @@
  * @file src/loaders/ModelLoader.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.1-beta
+ * @version 0.12.2-beta
  *
  * @description
  * Scans the `addons` directory for KythiaModel definitions, requires them,

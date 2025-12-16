@@ -4,7 +4,7 @@
  * @file src/utils/logger.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.1-beta
+ * @version 0.12.2-beta
  *
  * @description
  * Colorized and enhanced logger for the Discord bot.

@@ -4,7 +4,7 @@
  * @file src/cli/commands/MakeMigrationCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.1-beta
+ * @version 0.12.2-beta
  *
  * @description
  * Scaffolds a new database migration file with a precise YYYYMMDD_HHMMSS timestamp prefix.
@@ -62,7 +62,7 @@ export default class MakeMigrationCommand extends Command {
  * @type: Database Migration
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.1-beta
+ * @version 0.12.2-beta
  */
 module.exports = {
     async up(queryInterface, DataTypes) {
