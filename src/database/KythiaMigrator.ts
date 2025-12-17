@@ -4,7 +4,7 @@
  * @file src/database/KythiaMigrator.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.2-beta
+ * @version 0.12.3-beta
  *
  * @description
  * Scans 'addons' folder for migration files and executes them using Umzug.
@@ -75,7 +75,6 @@ const KythiaMigrator: KythiaMigratorFunction = async ({
 		info: (event: any) => {
 			if (typeof event === 'object') {
 				if (event.event === 'migrating') {
-
 				} else if (event.event === 'migrated') {
 					logger.info(`✅ Migrated: ${event.name}`);
 				}

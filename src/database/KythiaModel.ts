@@ -4,7 +4,7 @@
  * @file src/database/KythiaModel.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.2-beta
+ * @version 0.12.3-beta
  *
  * @description
  * Caching layer for Sequelize Models, now sharding-aware. When config.db.redis.shard === true,
