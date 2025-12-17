@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.3-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.2-beta...v0.12.3-beta) (2025-12-17)
+
+
+### ✨ Added
+
+* Implement legal agreement check and re-enable telemetry with license verification. ([4ec262c](https://github.com/kenndeclouv/kythia-core/commit/4ec262c590c44be99020bd1ec2c6c2909d5be418))
+
 ### [0.12.2-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.1-beta...v0.12.2-beta) (2025-12-16)
 
 
