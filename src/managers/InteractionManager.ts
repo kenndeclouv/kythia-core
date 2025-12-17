@@ -207,6 +207,18 @@ export class InteractionManager implements IInteractionManager {
 				this.container.logger = this.logger;
 			}
 
+			this.container.telemetry?.report(
+				'info',
+				`Command Executed: /${commandKey}`,
+				{
+					user: `${interaction.user.tag} (${interaction.user.id})`,
+					guild: interaction.guild
+						? `${interaction.guild.name} (${interaction.guild.id})`
+						: 'DM',
+					channel: interaction.channelId,
+				},
+			);
+
 			if (command.execute.length === 2) {
 				await command.execute(interaction, this.container);
 			} else {
@@ -575,6 +587,18 @@ export class InteractionManager implements IInteractionManager {
 		} catch (e) {
 			this.logger.error('Failed to send interaction error message:', e);
 		}
+
+		this.container.telemetry?.report(
+			'error',
+			`Interaction Error: ${error.message}`,
+			{
+				command: interaction.isCommand()
+					? interaction.commandName
+					: interaction.type,
+				user: interaction.user.id,
+				stack: error.stack,
+			},
+		);
 
 		try {
 			if (

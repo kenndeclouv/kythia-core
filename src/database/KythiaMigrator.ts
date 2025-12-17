@@ -75,7 +75,7 @@ const KythiaMigrator: KythiaMigratorFunction = async ({
 		info: (event: any) => {
 			if (typeof event === 'object') {
 				if (event.event === 'migrating') {
-					// Do nothing
+
 				} else if (event.event === 'migrated') {
 					logger.info(`✅ Migrated: ${event.name}`);
 				}

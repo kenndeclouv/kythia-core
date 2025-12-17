@@ -25,10 +25,9 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import type {
-	IAddonManager, // Interface Class
+	IAddonManager,
 	KythiaClient as IKythiaClient,
 	KythiaContainer,
-	// Type definitions
 	KythiaButtonHandler,
 	KythiaModalHandler,
 	KythiaSelectMenuHandler,
@@ -222,12 +221,12 @@ export default class AddonManager implements IAddonManager {
 	 * @returns {Object|null} Summary object for logging, or null if not registered
 	 */
 	registerCommand(
-		module: KythiaCommandModule, // 👈 Ganti 'any' jadi ini
+		module: KythiaCommandModule,
 		filePath: string,
 		commandNamesSet: Set<string>,
-		commandDataForDeployment: object[], // 👈 Ganti 'any[]' jadi 'object[]'
-		permissionDefaults: Record<string, any> = {}, // 👈 Kasih type Record
-		options: { folderName?: string } = {}, // 👈 Kasih type object specific
+		commandDataForDeployment: object[],
+		permissionDefaults: Record<string, any> = {},
+		options: { folderName?: string } = {},
 	): CommandRegistrationSummary | null {
 		if (this._isBaseCommandClass(module)) {
 			module = this._instantiateBaseCommand(module);
@@ -423,7 +422,6 @@ export default class AddonManager implements IAddonManager {
 
 			if (fs.existsSync(registerPath)) {
 				try {
-					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const registration = require(registerPath);
 					const regModule = registration.default || registration;
 
@@ -516,7 +514,7 @@ export default class AddonManager implements IAddonManager {
 			for (const file of files) {
 				try {
 					const filePath = path.join(dirPath, file);
-					// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 					let module = require(filePath);
 					if (module.default) module = module.default;
 

@@ -26,13 +26,11 @@ const voteLocked: KythiaMiddleware = {
 		const { KythiaVoter } = container.models;
 		const { kythiaConfig, t } = container;
 
-		// Ambil data voter sekali aja
 		const voter = await (KythiaVoter as any).getCache({
 			userId: interaction.user.id,
 		});
 		const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
 
-		// Cek: Belum pernah vote ATAU vote terakhir udah expired (lebih dari 12 jam lalu)
 		if (!voter || new Date(voter.votedAt) < twelveHoursAgo) {
 			const errContainer = new ContainerBuilder().setAccentColor(
 				convertColor(kythiaConfig.bot.color, {

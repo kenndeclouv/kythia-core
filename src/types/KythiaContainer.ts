@@ -1,4 +1,3 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: Using any for Model dynamicly load from kythia bot */
 import type { Interaction } from 'discord.js';
 import type { Sequelize, Model, ModelStatic } from 'sequelize';
 import type { KythiaConfig } from './KythiaConfig';
@@ -15,6 +14,7 @@ import type { ITranslatorManager } from './TranslatorManager';
 import type Redis from 'ioredis';
 
 import type { DiscordHelpers } from './DiscordHelpers';
+import type { TelemetryManager } from '../managers/TelemetryManager';
 
 export type AnySequelizeModel = ModelStatic<Model<any, any>>;
 
@@ -32,6 +32,7 @@ export interface KythiaContainer {
 	sequelize?: Sequelize;
 	kythiaConfig: KythiaConfig;
 	logger: KythiaLogger;
+	telemetry: TelemetryManager;
 
 	redis?: Redis;
 

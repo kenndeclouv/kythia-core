@@ -1,9 +1,9 @@
 import type { Dialect } from 'sequelize';
-import type { ActivityType } from 'discord.js'; // 🔥 Pake type native Discord
-import type { RedisOptions as IORedisOptions } from 'ioredis'; // 🔥 Pake type native Redis
+import type { ActivityType } from 'discord.js';
+import type { RedisOptions as IORedisOptions } from 'ioredis';
 
 export interface KythiaConfigOwner {
-	ids: string; // Comma separated IDs
+	ids: string;
 	names: string;
 }
 
@@ -19,7 +19,7 @@ export interface KythiaConfigBot {
 	totalShards: number | 'auto';
 	mainGuildId: string;
 	devGuildId?: string;
-	color: string; // Hex string or color name
+	color: string;
 	prefixes: string[];
 	status: 'online' | 'idle' | 'dnd' | 'invisible';
 	activityType: ActivityType;
@@ -315,13 +315,17 @@ export interface KythiaConfigEmojis {
 	musicFilter: string;
 	musicFavorite: string;
 	musicBack: string;
-	// Pake string, bukan any
+
 	[key: string]: string;
 }
 
 export interface KythiaConfig {
 	env: 'development' | 'production' | 'test' | 'local';
 	licenseKey: string;
+	legal: {
+		acceptTOS: boolean;
+		dataCollection: boolean;
+	};
 	version: string;
 	owner: KythiaConfigOwner;
 	sentry: KythiaConfigSentry;

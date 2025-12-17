@@ -8,14 +8,12 @@ import type { KythiaConfig, DiscordHelpers } from '../types';
 interface DiscordHelperDependencies {
 	kythiaConfig: KythiaConfig;
 	models: Record<string, any>;
-	// Property lain container gak perlu disini
 }
 
 export default function loadDiscordHelpers({
 	kythiaConfig,
 	models,
 }: DiscordHelperDependencies): DiscordHelpers {
-	// Cast models ke any karena dynamic properties
 	const { KythiaUser, KythiaTeam } = models as any;
 
 	function isOwner(userId: string): boolean {
@@ -24,11 +22,11 @@ export default function loadDiscordHelpers({
 		if (typeof ownerIds === 'string') {
 			ownerIds = ownerIds.split(',').map((id) => id.trim());
 		}
-		// Type assertion ke string[] kalau ownerIds bisa array
+
 		if (Array.isArray(ownerIds) && ownerIds.includes(String(userId))) {
 			return true;
 		}
-		// Fallback kalau cuma satu string dan belum displit (harusnya udah, tapi jaga2)
+
 		return String(ownerIds) === String(userId);
 	}
 

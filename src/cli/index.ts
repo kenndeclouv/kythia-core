@@ -23,11 +23,9 @@ import { Command } from 'commander';
 import BaseCommand from './Command';
 import path from 'node:path';
 import fs from 'node:fs';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const pc = require('picocolors');
 
-// Load package.json aman pake require
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { version } = require('../../package.json');
 
 const program = new Command();
@@ -42,7 +40,7 @@ const commandsDir = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsDir)) {
 	const commandFiles = fs
 		.readdirSync(commandsDir)
-		// 👇 Filter .d.ts biar gak error kayak middleware tadi
+
 		.filter(
 			(file) =>
 				(file.endsWith('.js') || file.endsWith('.ts')) &&
@@ -52,13 +50,10 @@ if (fs.existsSync(commandsDir)) {
 	for (const file of commandFiles) {
 		const filePath = path.join(commandsDir, file);
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
 			const moduleExport = require(filePath);
 
-			// Support Default Export (TS) & Module Exports (JS)
 			const CommandClass = moduleExport.default || moduleExport;
 
-			// Cek apakah dia turunan dari BaseCommand
 			if (
 				typeof CommandClass === 'function' &&
 				CommandClass.prototype instanceof BaseCommand
@@ -66,7 +61,6 @@ if (fs.existsSync(commandsDir)) {
 				const commandInstance = new CommandClass();
 				commandInstance.register(program);
 			} else if (typeof CommandClass.register === 'function') {
-				// Support static register method (legacy)
 				CommandClass.register(program);
 			}
 		} catch (err) {

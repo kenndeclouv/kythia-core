@@ -28,14 +28,9 @@ export default class MiddlewareManager {
 	}
 
 	public async loadMiddlewares(): Promise<void> {
-		// 👇 FIX 1: Reset array di SINI, sekali aja di awal.
 		this.middlewares = [];
 
 		const coreMiddlewarePath = path.join(__dirname, '..', 'middlewares');
-
-		// this.logger.info(
-		// 	`🔍 [Middleware] Loading Core Middlewares from: ${coreMiddlewarePath}`,
-		// );
 
 		if (fs.existsSync(coreMiddlewarePath)) {
 			await this._loadFromPath(coreMiddlewarePath);
@@ -52,13 +47,9 @@ export default class MiddlewareManager {
 			fs.existsSync(userMiddlewarePath) &&
 			userMiddlewarePath !== coreMiddlewarePath
 		) {
-			// this.logger.info(
-			// 	`🔍 [Middleware] Loading User Middlewares from: ${userMiddlewarePath}`,
-			// );
 			await this._loadFromPath(userMiddlewarePath);
 		}
 
-		// Sort cukup sekali aja di akhir
 		this.middlewares.sort((a, b) => (a.priority || 10) - (b.priority || 10));
 
 		this.logger.info(
@@ -73,15 +64,10 @@ export default class MiddlewareManager {
 				(f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
 			);
 
-		// 👇 FIX 2: HAPUS BARIS INI (Jangan di-reset di sini!)
-		// this.middlewares = []; ❌
-
-		// Kita pake array sementara buat log jumlah per-folder
 		let loadedCount = 0;
 
 		for (const file of files) {
 			try {
-				// eslint-disable-next-line @typescript-eslint/no-var-requires
 				const middleware = require(path.join(dirPath, file));
 				const mw = middleware.default || middleware;
 
@@ -90,7 +76,6 @@ export default class MiddlewareManager {
 					continue;
 				}
 
-				// Push ke array utama (numpuk, gak nimpa)
 				this.middlewares.push(mw as KythiaMiddleware);
 				loadedCount++;
 			} catch (err) {
@@ -98,8 +83,7 @@ export default class MiddlewareManager {
 			}
 		}
 
-		// Log khusus folder ini
-		this.logger.info(`🛡️  Loaded ${loadedCount} middlewares from this path.`);
+		this.logger.info(`🛡️  Loaded ${loadedCount} middlewares.`);
 	}
 
 	public async handle(

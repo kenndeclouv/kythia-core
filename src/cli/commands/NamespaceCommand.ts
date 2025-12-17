@@ -31,7 +31,6 @@ export default class NamespaceCommand extends Command {
 		console.log(pc.cyan('🚀 Starting namespace annotation process...'));
 		const rootDir = process.cwd();
 
-		// Helper: Find Files Recursive
 		function findJsFilesRecursive(dir: string): string[] {
 			let results: string[] = [];
 			if (!fs.existsSync(dir)) return results;

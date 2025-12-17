@@ -16,10 +16,9 @@ import type { KythiaContainer } from './KythiaContainer';
 import type { KythiaAugmentedEventHandler } from './EventManager';
 
 /* -------------------------------------------------------------------------- */
-/* TYPE ALIASES                               */
+/* TYPE ALIASES                               								  */
 /* -------------------------------------------------------------------------- */
 
-// Handler Types yang Strict
 export type KythiaButtonHandler = (
 	interaction: ButtonInteraction,
 	container: KythiaContainer,
@@ -40,11 +39,10 @@ export type KythiaAutocompleteHandler = (
 	container: KythiaContainer,
 ) => Promise<void> | void;
 
-// Event Handler
 export type KythiaEventHandler = KythiaAugmentedEventHandler;
 
 /* -------------------------------------------------------------------------- */
-/* DATA STRUCTURES                              */
+/* DATA STRUCTURES                                                            */
 /* -------------------------------------------------------------------------- */
 
 export interface SubcommandSummary {
@@ -60,7 +58,6 @@ export interface CommandRegistrationSummary {
 	subcommands?: (string | SubcommandSummary)[];
 }
 
-// Interface buat struktur Command Module
 export interface KythiaCommandModule {
 	data?: any;
 	slashCommand?: any;
@@ -73,15 +70,14 @@ export interface KythiaCommandModule {
 }
 
 /* -------------------------------------------------------------------------- */
-/* MAIN CLASS INTERFACE                            */
+/* MAIN CLASS INTERFACE                           							  */
 /* -------------------------------------------------------------------------- */
 
 export interface IAddonManager {
-	client: Client; // Atau IKythiaClient kalau mau strict
+	client: Client;
 	container: KythiaContainer;
 	logger: any;
 
-	// 👇 Sekarang pake Type Strict, bukan Function lagi
 	buttonHandlers: Map<string, KythiaButtonHandler>;
 	modalHandlers: Map<string, KythiaModalHandler>;
 	selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
@@ -93,7 +89,6 @@ export interface IAddonManager {
 	embedDrafts: Collection<string, APIEmbed | object>;
 	eventHandlers: Map<string, KythiaEventHandler[]>;
 
-	// 👇 Method signature juga diupdate
 	registerButtonHandler(customId: string, handler: KythiaButtonHandler): void;
 	registerSelectMenuHandler(
 		customIdPrefix: string,
@@ -109,13 +104,13 @@ export interface IAddonManager {
 	): void;
 
 	registerCommand(
-		module: KythiaCommandModule, // Pake strict type
+		module: KythiaCommandModule,
 		filePath: string,
 		commandNamesSet: Set<string>,
 		commandDataForDeployment: object[],
 		permissionDefaults?: any,
 		options?: any,
-	): CommandRegistrationSummary | null; // Pake strict return
+	): CommandRegistrationSummary | null;
 
 	loadAddons(kythiaInstance: any): Promise<object[]>;
 

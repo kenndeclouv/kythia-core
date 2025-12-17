@@ -20,7 +20,7 @@ const botPermissions: KythiaMiddleware = {
 			return true;
 
 		const me = interaction.guild.members.me;
-		if (!me) return true; // Safety check
+		if (!me) return true;
 
 		const missingPerms = me.permissions.missing(
 			command.botPermissions as PermissionsString[],

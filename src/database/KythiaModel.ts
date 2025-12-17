@@ -108,7 +108,6 @@ export class KythiaModel<
 	static _redisFailedIndexes = new Set<number>();
 	static _justFailedOver = false;
 
-	// Custom properties
 	static fillable?: string[];
 	static guarded?: string[];
 	static structure?: KythiaModelStructure;
@@ -117,6 +116,7 @@ export class KythiaModel<
 	static CACHE_KEYS?: any[];
 	static CACHE_TTL?: number;
 	static customInvalidationTags?: string[];
+	static useRedis: boolean;
 
 	/**
 	 * 🛡️ LARAVEL STYLE: MASS ASSIGNMENT PROTECTION
@@ -328,8 +328,9 @@ export class KythiaModel<
 		this.CACHE_VERSION = config.db?.redisCacheVersion || '1.0.0';
 
 		const redisConfig = config?.db?.redis;
-		const useRedis = config?.db?.useRedis !== false; // Default to true if undefined
+		const useRedis = config?.db?.useRedis !== false;
 
+		this.useRedis = useRedis;
 		this.isShardMode =
 			(typeof redisConfig === 'object' &&
 				redisConfig !== null &&
@@ -1593,8 +1594,8 @@ export class KythiaModel<
 	 */
 	static attachHooksToAllModels(sequelizeInstance: Sequelize, client: any) {
 		if (!this.redis) {
-			this.logger.error(
-				'❌ Cannot attach hooks because Redis is not initialized.',
+			this.logger.warn(
+				'🟠 Cannot attach hooks because Redis is not initialized or useRedis is false.',
 			);
 			return;
 		}

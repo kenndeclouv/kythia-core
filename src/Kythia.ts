@@ -59,7 +59,7 @@ import KythiaClient from './KythiaClient';
 
 import type { Sequelize } from 'sequelize';
 import type Redis from 'ioredis';
-// import { TelemetryManager } from './managers/TelemetryManager';
+import { TelemetryManager } from './managers/TelemetryManager';
 
 class Kythia {
 	public kythiaConfig: IKythiaConfig;
@@ -81,6 +81,7 @@ class Kythia {
 	public eventManager!: IEventManager;
 	public shutdownManager!: IShutdownManager;
 	public translator!: ITranslatorManager;
+	public telemetryManager!: TelemetryManager;
 
 	/**
 	 * 🏗️ Kythia Constructor
@@ -494,6 +495,43 @@ class Kythia {
 
 		this.logger.info('🚀 Starting kythia...');
 
+		const legalConfig = this.kythiaConfig.legal;
+
+		if (!legalConfig || !legalConfig.acceptTOS || !legalConfig.dataCollection) {
+			this.logger.error(
+				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+			this.logger.error('🛑 ACTION REQUIRED: TERMS OF SERVICE AGREEMENT');
+			this.logger.error(
+				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+			this.logger.error(
+				'To use Kythia Core, you MUST accept our Terms of Service.',
+			);
+			this.logger.error('');
+			this.logger.error(
+				'We collect the following data for license verification:',
+			);
+			this.logger.error('   - IP Address');
+			this.logger.error('   - Hardware Specification (CPU/RAM) for HWID');
+			this.logger.error('   - Bot Configuration');
+			this.logger.error('');
+			this.logger.error('👉 HOW TO FIX:');
+			this.logger.error('   Open your "kythia.config.js" file and set:');
+			this.logger.error('   legal: {');
+			this.logger.error('       acceptTOS: true,');
+			this.logger.error('       dataCollection: true');
+			this.logger.error('   }');
+			this.logger.error('');
+			this.logger.error('By setting true, you agree to our Privacy Policy at:');
+			this.logger.error('https://kythia.me/privacy');
+			this.logger.error(
+				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+
+			process.exit(1);
+		}
+
 		if (this.kythiaConfig.sentry?.dsn) {
 			Sentry.init({
 				dsn: this.kythiaConfig.sentry.dsn,
@@ -509,30 +547,48 @@ class Kythia {
 
 		this._checkRequiredConfig();
 
-		// const telemetry = new TelemetryManager({
-		// 	licenseKey: this.kythiaConfig.licenseKey,
-		// 	// apiUrl: 'https://api.kythia.xyz',
-		// 	apiUrl: 'http://localhost:8000',
-		// 	logger: this.logger,
-		// 	version: version,
-		// 	config: this.kythiaConfig
-		// });
+		const telemetry = new TelemetryManager({
+			licenseKey: this.kythiaConfig.licenseKey,
+			logger: this.logger,
+			version: version,
+			config: this.kythiaConfig,
+		});
 
-		// const isLicenseValid = await telemetry.verify();
+		this.telemetryManager = telemetry;
+		this.container.telemetry = telemetry;
 
-		// if (!isLicenseValid) {
-		// 	this.logger.error('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
-		// 	this.logger.error('🚫 ACCESS DENIED');
-		// 	this.logger.error('Your license key is missing, invalid, or expired.');
-		// 	this.logger.error('Please verify your license key in .env or contact support at:');
-		// 	this.logger.error('👉 https://dsc.gg/kythia');
-		// 	this.logger.error('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+		const isLicenseValid = await telemetry.verify();
 
-		// 	process.exit(1);
-		// }
+		if (!isLicenseValid) {
+			this.logger.error(
+				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+			this.logger.error('🚫 ACCESS DENIED');
+			this.logger.error('Your license key is missing, invalid, or expired.');
+			this.logger.error(
+				'Please verify your license key in .env or contact support at:',
+			);
+			this.logger.error('👉 https://dsc.gg/kythia');
+			this.logger.error(
+				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+
+			process.exit(1);
+		}
+
+		if (isLicenseValid) {
+			telemetry.startHeartbeat();
+			telemetry.startAutoFlush();
+
+			telemetry.report('info', `Bot Process Started (v${version})`, {
+				node: process.version,
+				platform: process.platform,
+				cwd: process.cwd(),
+			});
+		}
 
 		try {
-			const shouldDeploy = process.argv.includes('--deploy');
+			const shouldDeploy = !process.argv.includes('--dev');
 
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
 
@@ -613,7 +669,7 @@ class Kythia {
 				await this._deployCommands(allCommands);
 			} else {
 				this.logger.info(
-					'⏭️  Skipping command deployment. Use --deploy flag to force update.',
+					'⏭️  Skipping command deployment because --dev flag is present.',
 				);
 			}
 
@@ -627,6 +683,16 @@ class Kythia {
 
 			this.client.once('clientReady', async (c: Client) => {
 				this.logger.info(`🌸 Logged in as ${this.client.user?.tag}`);
+
+				this.telemetryManager.report(
+					'info',
+					`Bot Client Ready: ${c.user?.tag}`,
+					{
+						guilds: c.guilds.cache.size,
+						users: c.users.cache.size,
+					},
+				);
+
 				this.logger.info(
 					`🚀 Executing ${this.clientReadyHooks.length} client-ready hooks...`,
 				);
@@ -640,8 +706,17 @@ class Kythia {
 			});
 
 			await this.client.login(this.kythiaConfig.bot.token);
-		} catch (error) {
+		} catch (error: any) {
 			this.logger.error('❌ Kythia initialization failed:', error);
+			try {
+				await this.telemetryManager.report(
+					'error',
+					`Startup Fatal Crash: ${error.message}`,
+					{
+						stack: error.stack,
+					},
+				);
+			} catch (_e) {}
 			if (this.kythiaConfig.sentry?.dsn) {
 				Sentry.captureException(error);
 			}

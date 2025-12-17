@@ -16,11 +16,8 @@ const userPermissions: KythiaMiddleware = {
 		command: any,
 		container: KythiaContainer,
 	): Promise<boolean> {
-		// Guard clause: Kalau command gak butuh perms atau bukan di guild, skip
 		if (!command.permissions || !interaction.inGuild()) return true;
 
-		// interaction.member di API interaction bisa null/APIInteractionGuildMember
-		// Kita cast ke any dulu atau GuildMember kalau sudah di-fetch
 		const member = interaction.member;
 		if (!member || typeof (member as any).permissions.missing !== 'function')
 			return true;

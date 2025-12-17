@@ -34,7 +34,6 @@ export default class UpversionCommand extends Command {
 			process.exit(1);
 		}
 
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		const pkg = require(pkgPath);
 		const version = pkg.version;
 		console.log(pc.cyan(`✨ Using version from package.json: ${version}`));

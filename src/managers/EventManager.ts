@@ -22,7 +22,6 @@ import type {
 export default class EventManager implements IEventManager {
 	public client: Client;
 	public container: KythiaContainer;
-	// Map<EventName, ListOfHandlers>
 	public eventHandlers: Map<string, KythiaAugmentedEventHandler[]>;
 	public logger: KythiaLogger;
 
@@ -46,16 +45,24 @@ export default class EventManager implements IEventManager {
 			this.client.on(eventName, async (...args: any[]) => {
 				for (const handler of handlers) {
 					try {
-						// Pass 'this' (EventManager) as first argument sesuai logic lama
 						const stopPropagation = await handler(this, ...args);
 
 						if (stopPropagation === true) {
 							break;
 						}
-					} catch (error) {
+					} catch (error: any) {
 						this.logger.error(
 							`Error executing event handler for [${eventName}]:`,
 							error,
+						);
+
+						this.container.telemetry?.report(
+							'error',
+							`Event Handler Failed: [${eventName}]`,
+							{
+								message: error.message,
+								stack: error.stack,
+							},
 						);
 					}
 				}
@@ -82,7 +89,7 @@ export default class EventManager implements IEventManager {
 		handler: KythiaAugmentedEventHandler,
 	): void {
 		if (this.eventHandlers.has(eventName)) {
-			// WOI
+			// WOI RESPECT DIKIT NAPA
 			const handlers = this.eventHandlers.get(
 				eventName,
 			) as KythiaAugmentedEventHandler[];

@@ -61,13 +61,11 @@ export class ShutdownManager implements IShutdownManager {
 		const originalSetInterval = global.setInterval;
 		const originalClearInterval = global.clearInterval;
 
-		// 👇 GANTI BAGIAN INI: Pake (global as any) biar TS gak rewel soal signature
 		(global as any).setInterval = (
 			callback: (...args: any[]) => void,
 			ms?: number,
 			...args: any[]
 		): NodeJS.Timeout => {
-			// Panggil fungsi asli
 			const intervalId = originalSetInterval(callback, ms, ...args);
 
 			this._activeIntervals.add(intervalId);

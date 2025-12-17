@@ -30,7 +30,6 @@ import createSequelizeInstance from '../../database/KythiaSequelize';
 import KythiaStorage from '../../database/KythiaStorage';
 import type { KythiaConfig } from '../../types';
 
-// Cari config
 const configPath = path.resolve(process.cwd(), 'kythia.config.js');
 
 if (!fs.existsSync(configPath)) {
@@ -38,10 +37,8 @@ if (!fs.existsSync(configPath)) {
 	process.exit(1);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const config = require(configPath) as KythiaConfig;
 
-// Init Sequelize
 const sequelize = createSequelizeInstance(config);
 
 interface MigrationFile {
@@ -65,7 +62,7 @@ function getMigrationFiles(): MigrationFile[] {
 		if (fs.existsSync(migrationDir)) {
 			const files = fs
 				.readdirSync(migrationDir)
-				.filter((f) => f.endsWith('.js') || f.endsWith('.ts')) // Support TS migrations too
+				.filter((f) => f.endsWith('.js') || f.endsWith('.ts'))
 				.map((f) => ({
 					name: f,
 					path: path.join(migrationDir, f),
@@ -117,12 +114,10 @@ const umzug = new Umzug({
 		name: m.name,
 		path: m.path,
 		up: async ({ context }: { context: QueryInterface }) => {
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
 			const migration = require(m.path);
 			return migration.up(context, DataTypes);
 		},
 		down: async ({ context }: { context: QueryInterface }) => {
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
 			const migration = require(m.path);
 			return migration.down(context, DataTypes);
 		},

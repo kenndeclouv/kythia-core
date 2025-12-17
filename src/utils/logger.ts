@@ -17,32 +17,25 @@
  * - Daily rotating log files for combined and error logs
  * - Flush-and-exit helper to ensure all logs are written
  */
-/**
- * 📄 Logger
- * @file src/utils/logger.ts
- */
 
 import winston from 'winston';
-import 'winston-daily-rotate-file'; // Ini auto-attach ke winston.transports
+import 'winston-daily-rotate-file';
 import path from 'node:path';
 import fs from 'node:fs';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const clc = require('cli-color');
 
 import type { KythiaLogger } from '../types';
 
 const logDir = 'logs';
-// Kita asumsikan config ada di root process
+
 const configPath = path.resolve(process.cwd(), 'kythia.config.js');
 
-// Helper buat load config JS (karena config bot biasanya JS)
 let kythiaConfig: any;
 try {
 	if (fs.existsSync(configPath)) {
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		kythiaConfig = require(configPath);
 	} else {
-		// Fallback dummy config biar gak crash kalau dipanggil sebagai library murni
 		kythiaConfig = { env: 'development', settings: {} };
 	}
 } catch (e) {
@@ -197,10 +190,8 @@ function exitAfterFlush(code = 0) {
 	});
 }
 
-// Attach custom method
 logger.exitAfterFlush = exitAfterFlush;
 
-// Handler global errors
 process.on('uncaughtException', (error, origin) => {
 	logger.error({
 		message: `UNCAUGHT EXCEPTION: ${error.message}`,

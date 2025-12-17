@@ -26,7 +26,7 @@ const isInMainGuild: KythiaMiddleware = {
 		const { client, kythiaConfig, t, logger } = container;
 		const mainGuildId = kythiaConfig.bot.mainGuildId;
 
-		if (!mainGuildId) return true; // Skip if no main guild set
+		if (!mainGuildId) return true;
 
 		const mainGuild = client.guilds.cache.get(mainGuildId);
 

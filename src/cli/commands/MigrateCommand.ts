@@ -73,7 +73,6 @@ export default class MigrateCommand extends Command {
 				);
 				if (answer === 'y' || answer === 'yes') {
 					try {
-						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const { Sequelize } = require('sequelize');
 						const currentDialect = sequelize.getDialect();
 						const adminConfig = {

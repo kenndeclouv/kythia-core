@@ -17,13 +17,12 @@ const cooldown: KythiaMiddleware = {
 			command.cooldown ?? kythiaConfig.bot.globalCommandCooldown ?? 15;
 		if (cooldownDuration <= 0) return true;
 
-		// Akses client.cooldowns yang udah kita define di type KythiaClient
 		if (!client.cooldowns.has(command.name)) {
 			client.cooldowns.set(command.name, new Collection());
 		}
 
 		const now = Date.now();
-		const timestamps = client.cooldowns.get(command.name); // Pake ! karena barusan di-set
+		const timestamps = client.cooldowns.get(command.name);
 		const cooldownAmount = cooldownDuration * 1000;
 
 		if (timestamps?.has(interaction.user.id)) {

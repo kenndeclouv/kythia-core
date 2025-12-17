@@ -48,7 +48,7 @@ const createSequelizeInstance: CreateSequelizeInstance = (
 	const dialect = dbConfig.driver as Dialect;
 	const dbName = dbConfig.name;
 	const dbUser = dbConfig.user || process.env.DB_USER;
-	// Handle both 'pass' (from KythiaConfig) and 'password' (potential legacy/typo)
+
 	const dbPassword =
 		(dbConfig as any).password || dbConfig.pass || process.env.DB_PASSWORD;
 	const dbHost = dbConfig.host || process.env.DB_HOST;

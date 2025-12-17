@@ -6,11 +6,9 @@ import type { KythiaContainer } from './KythiaContainer';
  * Mewarisi semua fitur Discord.js Client, plus fitur custom Kythia.
  */
 export interface KythiaClient extends Client {
-	// Custom Properties
 	commands: Collection<string, any>;
-	cooldowns: Collection<string, Collection<string, number>>; // Collection<UserId, Timestamp>
+	cooldowns: Collection<string, Collection<string, number>>;
 	restartNoticeCooldowns?: Collection<string, number>;
 
-	// Dependency Injection Container yang nempel di client
 	container: KythiaContainer;
 }

@@ -17,10 +17,8 @@ export default class TranslatorManager {
 	private logger: any;
 	private config: any;
 
-	// Cache guild language: Collection<GuildId, LangCode>
 	public guildLanguageCache: Collection<string, string>;
 
-	// Storage locale: Collection<LangCode, LocaleData>
 	public locales: Collection<string, LocaleData>;
 
 	public defaultLang: string;
@@ -106,18 +104,15 @@ export default class TranslatorManager {
 		variables: TranslationVariables = {},
 		forceLang: string | null = null,
 	): Promise<string> {
-		// Ambil Model ServerSetting dari container
 		const ServerSetting = this.container.models?.ServerSetting;
 
 		let lang: string | null = forceLang;
 
-		// 1. Cek Guild Language (Cache -> DB)
 		if (!lang && interaction && interaction.guildId) {
 			if (this.guildLanguageCache.has(interaction.guildId)) {
 				lang = this.guildLanguageCache.get(interaction.guildId) || null;
 			} else if (ServerSetting) {
 				try {
-					// Kita asumsikan ServerSetting punya method getCache (sesuai kode lama)
 					const setting = await (ServerSetting as any).getCache({
 						guildId: interaction.guildId,
 					});
@@ -131,7 +126,6 @@ export default class TranslatorManager {
 
 		if (!lang) lang = this.defaultLang;
 
-		// 2. Ambil data bahasa
 		let primaryLangFile = this.locales.get(lang);
 		const fallbackLangFile = this.locales.get(this.defaultLang);
 
@@ -140,7 +134,6 @@ export default class TranslatorManager {
 			primaryLangFile = fallbackLangFile;
 		}
 
-		// 3. Resolve Key
 		let translation = this._getNestedValue(primaryLangFile, key);
 
 		if (translation === undefined && fallbackLangFile) {
@@ -151,7 +144,6 @@ export default class TranslatorManager {
 			return `[${key}]`;
 		}
 
-		// 4. Replace Variable {variable}
 		for (const [variable, value] of Object.entries(variables)) {
 			const regex = new RegExp(`{${variable}}`, 'g');
 			translation = translation.replace(regex, String(value));

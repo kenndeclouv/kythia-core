@@ -23,7 +23,6 @@ export interface IInteractionManager {
 	client: KythiaClient;
 	container: KythiaContainer;
 
-	// Handlers
 	buttonHandlers: Map<string, KythiaButtonHandler>;
 	modalHandlers: Map<string, KythiaModalHandler>;
 	selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
@@ -31,7 +30,6 @@ export interface IInteractionManager {
 	commandCategoryMap: Map<string, string>;
 	categoryToFeatureMap: Map<string, string>;
 
-	// Dependencies
 	kythiaConfig: KythiaConfig;
 	models: any;
 	helpers: any;
@@ -39,11 +37,9 @@ export interface IInteractionManager {
 	t: any;
 	middlewareManager: IMiddlewareManager;
 
-	// Models
 	ServerSetting: any;
 	KythiaVoter: any;
 
-	// Helpers
 	isTeam: (userId: string) => Promise<boolean>;
 	isOwner: (userId: string) => boolean;
 
