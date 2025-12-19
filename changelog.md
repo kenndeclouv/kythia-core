@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.4-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.3-beta...v0.12.4-beta) (2025-12-19)
+
+
+### ✨ Added
+
+* enhance log message formatting with level icons and improved alignment ([a96c444](https://github.com/kenndeclouv/kythia-core/commit/a96c444c81c0b5e926caea8dc5d76a2329fad724))
+* Refactor language resolution in TranslatorManager and update dependencies to Discord.js v14.15.3 and dotenvx, removing old middleware. ([3fe6b21](https://github.com/kenndeclouv/kythia-core/commit/3fe6b21a8f0d1712241d57fee3926a5fbd95b533))
+
 ### [0.12.3-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.2-beta...v0.12.3-beta) (2025-12-17)
 
 
