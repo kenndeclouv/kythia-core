@@ -60,6 +60,16 @@ const levelColors: Record<string, any> = {
 	default: clc.bgWhite.black,
 };
 
+const levelIcons: Record<string, string> = {
+	error: '✖',
+	warn: '⚠',
+	info: 'ℹ',
+	debug: '⚙',
+	silly: '💬',
+	verbose: '🔎',
+	default: '✿',
+};
+
 const messageColors: Record<string, any> = {
 	error: clc.redBright,
 	warn: clc.yellowBright,
@@ -96,11 +106,16 @@ consoleFormatters.push(
 		const levelKey = level in levelColors ? level : 'default';
 		const msgKey = level in messageColors ? level : 'default';
 
-		const levelLabel = levelColors[levelKey](` ${level.toUpperCase()} `);
+		const icon = levelIcons[levelKey] || levelIcons.default;
+		const levelText = level.toUpperCase().padEnd(7);
+		const levelLabel = levelColors[levelKey](` ${icon} ${levelText} `);
+
 		const timeLabel = timestamp ? clc.blackBright(`[${timestamp}]`) : '';
 		const categoryLabel = label
 			? clc.bgWhite.black.bold(` ${String(label).toUpperCase()} `)
 			: '';
+
+		const separator = clc.blackBright('│');
 
 		let msg: any;
 		if (typeof message === 'object' && message !== null) {
@@ -109,7 +124,12 @@ consoleFormatters.push(
 			msg = messageColors[msgKey](message);
 		}
 
-		return `${timeLabel}${timeLabel ? ' ' : ''}${levelLabel}${categoryLabel} ${msg}`.trim();
+		const header =
+			`${timeLabel}${timeLabel ? ' ' : ''}${levelLabel}${categoryLabel ? ` ${categoryLabel}` : ''}`.trim();
+		const visibleLength = clc.strip(header).length;
+		const padding = ' '.repeat(Math.max(0, 12 - visibleLength));
+
+		return `${header}${padding} ${separator} ${msg}`;
 	}),
 );
 
