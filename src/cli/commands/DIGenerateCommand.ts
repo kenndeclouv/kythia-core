@@ -3,7 +3,7 @@
  *
  * @file src/cli/commands/DIGenerateCommand.ts
  * @copyright © 2025 kenndeclouv
- * @version 0.12.3-beta
+ * @version 0.12.4-beta
  *
  * @description
  * 1. Reads index.js using AST to find which helpers are ACTUALLY injected.
