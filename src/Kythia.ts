@@ -128,7 +128,6 @@ class Kythia {
 		this.models = models;
 		const internalDiscordHelpers = loadDiscordHelpers({
 			kythiaConfig: this.kythiaConfig,
-			models: this.models,
 		});
 
 		const userHelpers = helpers || {};
@@ -162,6 +161,9 @@ class Kythia {
 			t: async () => '',
 			models: this.models,
 		} as unknown as IKythiaContainer;
+
+		this.translator = new TranslatorManager({ container: this.container });
+		this.container.translator = this.translator;
 
 		this.client.container = this.container;
 		this.client.cooldowns = new Collection();
@@ -341,7 +343,9 @@ class Kythia {
 				}
 			}
 
-			this.logger.info(`⭕ All Slash Commands: ${commands.length}`);
+			this.logger.info(`⭕ All Slash Commands: ${commands.length}`, {
+				label: 'Slash Commands',
+			});
 			this.logger.info(`⭕ Top Level Slash Commands: ${slash}`);
 			this.logger.info(`⭕ User Context Menu: ${user}`);
 			this.logger.info(`⭕ Message Context Menu: ${message}`);
@@ -601,7 +605,7 @@ class Kythia {
 
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Translator System ]▬▬▬▬▬▬▬▬▬▬▬');
 
-			this.translator = new TranslatorManager({ container: this.container });
+			// this.translator = new TranslatorManager({ container: this.container });
 
 			const coreLangPath = path.join(__dirname, 'lang');
 			this.translator.loadLocalesFromDir(coreLangPath);

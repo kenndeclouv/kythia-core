@@ -23,7 +23,6 @@ export class TelemetryManager {
 	private config: IKythiaConfig;
 
 	private logQueue: LogQueueItem[] = [];
-	private flushInterval: NodeJS.Timeout | null = null;
 
 	private networkFailures = 0;
 
@@ -36,6 +35,8 @@ export class TelemetryManager {
 
 	private readonly _t: string =
 		'aHR0cHM6Ly9reXRoaWEtbGljZW5zZS56dXVsaXppbHV1ei53b3JrZXJzLmRldi9hcGkvdjEvbGljZW5zZS90ZWxlbWV0cnk=';
+
+	flushInterval: NodeJS.Timeout | undefined;
 
 	private get _ep(): string {
 		return Buffer.from(this._e, 'base64').toString('utf-8');

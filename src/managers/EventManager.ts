@@ -89,7 +89,6 @@ export default class EventManager implements IEventManager {
 		handler: KythiaAugmentedEventHandler,
 	): void {
 		if (this.eventHandlers.has(eventName)) {
-			// WOI RESPECT DIKIT NAPA
 			const handlers = this.eventHandlers.get(
 				eventName,
 			) as KythiaAugmentedEventHandler[];

@@ -16,12 +16,16 @@
  * -  Context Aware: Preserves keys and complex placeholders.
  */
 
-import 'dotenv/config';
-import fs from 'node:fs';
-import path from 'node:path';
 import { GoogleGenAI } from '@google/genai';
+import { config } from '@dotenvx/dotenvx';
 import Command from '../Command';
+import path from 'node:path';
 import pc from 'picocolors';
+import fs from 'node:fs';
+
+config({
+	quiet: true,
+});
 
 export default class LangTranslateCommand extends Command {
 	public signature = 'lang:translate <target>';

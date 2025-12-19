@@ -33,7 +33,7 @@ export default class MiddlewareManager {
 		const coreMiddlewarePath = path.join(__dirname, '..', 'middlewares');
 
 		if (fs.existsSync(coreMiddlewarePath)) {
-			await this._loadFromPath(coreMiddlewarePath);
+			await this._loadFromPath(coreMiddlewarePath, 'core');
 		} else {
 			this.logger.warn(
 				`⚠️ Core middlewares path not found: ${coreMiddlewarePath}`,
@@ -41,13 +41,15 @@ export default class MiddlewareManager {
 		}
 
 		const appRoot = this.container.appRoot || process.cwd();
-		const userMiddlewarePath = path.join(appRoot, 'src', 'middlewares');
+		const userPaths = [
+			path.join(appRoot, 'src', 'middlewares'),
+			path.join(appRoot, 'middlewares'),
+		];
 
-		if (
-			fs.existsSync(userMiddlewarePath) &&
-			userMiddlewarePath !== coreMiddlewarePath
-		) {
-			await this._loadFromPath(userMiddlewarePath);
+		for (const userPath of userPaths) {
+			if (fs.existsSync(userPath) && userPath !== coreMiddlewarePath) {
+				await this._loadFromPath(userPath, 'bot');
+			}
 		}
 
 		this.middlewares.sort((a, b) => (a.priority || 10) - (b.priority || 10));
@@ -57,7 +59,7 @@ export default class MiddlewareManager {
 		);
 	}
 
-	private async _loadFromPath(dirPath: string): Promise<void> {
+	private async _loadFromPath(dirPath: string, source: string): Promise<void> {
 		const files = fs
 			.readdirSync(dirPath)
 			.filter(
@@ -83,7 +85,7 @@ export default class MiddlewareManager {
 			}
 		}
 
-		this.logger.info(`🛡️  Loaded ${loadedCount} middlewares.`);
+		this.logger.info(`🛡️  Loaded ${loadedCount} middlewares from ${source}`);
 	}
 
 	public async handle(

@@ -568,14 +568,6 @@ export class KythiaModel<
 			return null;
 		}
 
-		this.logger.info(
-			`[REDIS][INIT] Connecting to Redis fallback #${
-				this._redisCurrentIndex + 1
-			}/${this._redisFallbackURLs.length}: ${
-				typeof opt === 'string' ? opt : redisOpt.url || '(object)'
-			}`,
-		);
-
 		this.redis = new Redis(redisOpt.url || redisOpt);
 
 		this._setupRedisEventHandlers();

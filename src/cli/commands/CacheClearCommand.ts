@@ -16,11 +16,15 @@
  * -  Target Selection: Allows flushing specific instances or all at once.
  */
 
+import { config } from '@dotenvx/dotenvx';
+import readline from 'node:readline';
 import Command from '../Command';
 import pc from 'picocolors';
-import readline from 'node:readline';
 import Redis from 'ioredis';
-import 'dotenv/config';
+
+config({
+	quiet: true,
+});
 
 function askQuestion(query: string): Promise<string> {
 	const rl = readline.createInterface({

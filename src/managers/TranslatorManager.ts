@@ -1,5 +1,5 @@
 /**
- * 倹 Translator Manager
+ * 🌐 Translator Manager
  * @file src/managers/TranslatorManager.ts
  */
 
@@ -12,19 +12,19 @@ import type {
 	TranslationVariables,
 } from '../types';
 
+type LanguageResolver = (guildId: string) => Promise<string | null>;
+
 export default class TranslatorManager {
-	private container: KythiaContainer;
 	private logger: any;
 	private config: any;
 
 	public guildLanguageCache: Collection<string, string>;
-
 	public locales: Collection<string, LocaleData>;
-
 	public defaultLang: string;
 
+	private languageResolver: LanguageResolver = async () => null;
+
 	constructor({ container }: { container: KythiaContainer }) {
-		this.container = container;
 		this.logger = container.logger;
 		this.config = container.kythiaConfig;
 
@@ -33,9 +33,10 @@ export default class TranslatorManager {
 		this.defaultLang = this.config.bot.language || 'en';
 	}
 
-	/**
-	 * Helper buat deep merge object
-	 */
+	public setLanguageResolver(resolver: LanguageResolver) {
+		this.languageResolver = resolver;
+	}
+
 	private _deepMerge(target: any, source: any): any {
 		for (const key of Object.keys(source)) {
 			if (source[key] instanceof Object && !Array.isArray(source[key])) {
@@ -48,9 +49,6 @@ export default class TranslatorManager {
 		return target;
 	}
 
-	/**
-	 * Load locale dari folder tertentu
-	 */
 	public loadLocalesFromDir(dirPath: string): void {
 		if (!fs.existsSync(dirPath)) return;
 
@@ -68,23 +66,31 @@ export default class TranslatorManager {
 					const existingData = this.locales.get(langCode);
 					const mergedData = this._deepMerge(existingData, newData);
 					this.locales.set(langCode, mergedData);
-					this.logger.debug(`🌐 Merged locale: ${langCode} from ${dirPath}`);
+
+					let source = dirPath;
+					if (dirPath.includes('addons')) {
+						const addonName = path.basename(path.dirname(dirPath));
+						source = `addon ${addonName}`;
+					} else if (dirPath.endsWith('src/lang')) {
+						source = 'core';
+					} else if (dirPath.endsWith('lang')) {
+						source = 'app';
+					}
+
+					this.logger.debug(`🌐 Merged locale ${langCode} from ${source}`);
 				} else {
 					this.locales.set(langCode, newData);
 					this.logger.info(`🌐 Loaded New Language: ${langCode}`);
 				}
 			} catch (err) {
 				this.logger.error(
-					`笶Error loading language file ${file} from ${dirPath}:`,
+					`Error loading language file ${file} from ${dirPath}:`,
 					err,
 				);
 			}
 		}
 	}
 
-	/**
-	 * Ambil nested value pake dot notation
-	 */
 	private _getNestedValue(obj: any, pathExpr: string): string | undefined {
 		if (!pathExpr) return undefined;
 		return pathExpr
@@ -95,28 +101,23 @@ export default class TranslatorManager {
 			) as string | undefined;
 	}
 
-	/**
-	 * Fungsi translate utama (t)
-	 */
 	public async t(
-		interaction: BaseInteraction | null,
+		interaction: BaseInteraction | null | { guildId: string | null },
 		key: string,
 		variables: TranslationVariables = {},
 		forceLang: string | null = null,
 	): Promise<string> {
-		const ServerSetting = this.container.models?.ServerSetting;
-
 		let lang: string | null = forceLang;
 
 		if (!lang && interaction && interaction.guildId) {
 			if (this.guildLanguageCache.has(interaction.guildId)) {
 				lang = this.guildLanguageCache.get(interaction.guildId) || null;
-			} else if (ServerSetting) {
+			} else {
 				try {
-					const setting = await (ServerSetting as any).getCache({
-						guildId: interaction.guildId,
-					});
-					lang = setting?.language ? setting.language : this.defaultLang;
+					const resolvedLang = await this.languageResolver(interaction.guildId);
+
+					lang = resolvedLang || this.defaultLang;
+
 					if (lang) this.guildLanguageCache.set(interaction.guildId, lang);
 				} catch (_e) {
 					lang = this.defaultLang;

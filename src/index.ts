@@ -11,7 +11,6 @@ import kythiaClient from './KythiaClient';
 import KythiaModel from './database/KythiaModel';
 import createSequelizeInstance from './database/KythiaSequelize';
 import { utils } from './utils';
-
 import BaseCommand from './structures/BaseCommand';
 
 export {

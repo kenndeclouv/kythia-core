@@ -18,11 +18,15 @@
  * -  Singleton-like: Exports shared instances of Sequelize and Umzug.
  */
 
-import 'dotenv/config';
-import fs from 'node:fs';
-import path from 'node:path';
-import { Umzug } from 'umzug';
 import { DataTypes, type QueryInterface } from 'sequelize';
+import { config } from '@dotenvx/dotenvx';
+import { Umzug } from 'umzug';
+import path from 'node:path';
+import fs from 'node:fs';
+
+config({
+	quiet: true,
+});
 
 const pc = require('picocolors');
 
@@ -37,9 +41,9 @@ if (!fs.existsSync(configPath)) {
 	process.exit(1);
 }
 
-const config = require(configPath) as KythiaConfig;
+const kythiaConfig = require(configPath) as KythiaConfig;
 
-const sequelize = createSequelizeInstance(config);
+const sequelize = createSequelizeInstance(kythiaConfig);
 
 interface MigrationFile {
 	name: string;

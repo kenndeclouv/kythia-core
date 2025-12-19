@@ -37,10 +37,6 @@ export interface IInteractionManager {
 	t: any;
 	middlewareManager: IMiddlewareManager;
 
-	ServerSetting: any;
-	KythiaVoter: any;
-
-	isTeam: (userId: string) => Promise<boolean>;
 	isOwner: (userId: string) => boolean;
 
 	initialize(): void;

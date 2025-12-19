@@ -1,4 +1,3 @@
-import type { Interaction } from 'discord.js';
 import type { Sequelize, Model, ModelStatic } from 'sequelize';
 import type { KythiaConfig } from './KythiaConfig';
 import type { KythiaClient } from './KythiaClient';
@@ -9,7 +8,10 @@ import type { IInteractionManager } from './InteractionManager';
 import type { IShutdownManager } from './ShutdownManager';
 import type { IEventManager } from './EventManager';
 import type { IMiddlewareManager } from './MiddlewareManager';
-import type { ITranslatorManager } from './TranslatorManager';
+import type {
+	ITranslatorManager,
+	TranslateFunction,
+} from './TranslatorManager';
 
 import type Redis from 'ioredis';
 
@@ -36,12 +38,7 @@ export interface KythiaContainer {
 
 	redis?: Redis;
 
-	t: (
-		interaction: Interaction | null,
-		key: string,
-		variables?: TranslationVars,
-		forceLang?: string | null,
-	) => Promise<string>;
+	t: TranslateFunction;
 
 	translator?: ITranslatorManager;
 	middlewareManager?: IMiddlewareManager;

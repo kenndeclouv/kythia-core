@@ -9,7 +9,7 @@ export type LocaleData = {
 };
 
 export type TranslateFunction = (
-	interaction: BaseInteraction | null,
+	interaction: BaseInteraction | null | { guildId: string | null },
 	key: string,
 	variables?: TranslationVariables,
 	forceLang?: string | null,
@@ -20,6 +20,10 @@ export interface ITranslatorManager {
 	defaultLang: string;
 
 	loadLocalesFromDir(dirPath: string): void;
+
+	setLanguageResolver(
+		resolver: (guildId: string) => Promise<string | null>,
+	): void;
 
 	t: TranslateFunction;
 

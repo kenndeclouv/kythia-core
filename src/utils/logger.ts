@@ -53,7 +53,7 @@ const isProduction = kythiaConfig.env === 'production';
 const levelColors: Record<string, any> = {
 	error: clc.bgRed.whiteBright.bold,
 	warn: clc.bgYellow.black.bold,
-	info: clc.bgCyan.black.bold,
+	info: clc.bgBlue.whiteBright.bold,
 	debug: clc.bgMagenta.white.bold,
 	silly: clc.bgBlue.white,
 	verbose: clc.bgGreen.black,
@@ -97,8 +97,10 @@ consoleFormatters.push(
 		const msgKey = level in messageColors ? level : 'default';
 
 		const levelLabel = levelColors[levelKey](` ${level.toUpperCase()} `);
-		const timeLabel = timestamp ? clc.blackBright(timestamp) : '';
-		const categoryLabel = label ? clc.bgYellow.black.bold(` ${label} `) : '';
+		const timeLabel = timestamp ? clc.blackBright(`[${timestamp}]`) : '';
+		const categoryLabel = label
+			? clc.bgWhite.black.bold(` ${String(label).toUpperCase()} `)
+			: '';
 
 		let msg: any;
 		if (typeof message === 'object' && message !== null) {
@@ -107,13 +109,13 @@ consoleFormatters.push(
 			msg = messageColors[msgKey](message);
 		}
 
-		return `${timeLabel} ${categoryLabel}${levelLabel} ${msg}`.trim();
+		return `${timeLabel}${timeLabel ? ' ' : ''}${levelLabel}${categoryLabel} ${msg}`.trim();
 	}),
 );
 
 const colorConsoleFormat = winston.format.combine(...consoleFormatters);
 
-const logger = winston.createLogger({
+const winstonLogger = winston.createLogger({
 	level: isProduction ? 'info' : 'debug',
 	transports: [
 		new winston.transports.Console({
@@ -171,7 +173,51 @@ const logger = winston.createLogger({
 		}),
 	],
 	exitOnError: false,
-}) as KythiaLogger;
+});
+
+/**
+ * 🛠️ Kythia Logger Wrapper
+ * Allows the logger to be called as a function, defaulting to 'info' level.
+ */
+const logger = ((message: any, options: any = {}) => {
+	return winstonLogger.info(message, options);
+}) as unknown as KythiaLogger;
+
+// Proxy winston methods to the wrapper
+const methods = [
+	'error',
+	'warn',
+	'info',
+	'debug',
+	'silly',
+	'verbose',
+	'log',
+	'add',
+	'remove',
+	'clear',
+	'close',
+	'end',
+	'on',
+	'emit',
+	'once',
+	'off',
+	'addListener',
+	'removeListener',
+	'removeAllListeners',
+] as const;
+
+for (const method of methods) {
+	(logger as any)[method] = winstonLogger[method].bind(winstonLogger);
+}
+
+// Attach transports and other properties
+logger.transports = winstonLogger.transports;
+logger.level = winstonLogger.level;
+logger.levels = winstonLogger.levels;
+logger.exceptions = winstonLogger.exceptions;
+logger.rejections = winstonLogger.rejections;
+logger.profilers = winstonLogger.profilers;
+logger.exitOnError = winstonLogger.exitOnError;
 
 /**
  * Ensures all logs are flushed before exiting the process.
@@ -179,11 +225,11 @@ const logger = winston.createLogger({
 function exitAfterFlush(code = 0) {
 	logger.info(clc.yellowBright(`Process will exit with code: ${code}`));
 
-	const transportPromises = logger.transports.map((transport) => {
+	const transportPromises = winstonLogger.transports.map((transport) => {
 		return new Promise((resolve) => transport.on('finish', resolve));
 	});
 
-	logger.end();
+	winstonLogger.end();
 
 	Promise.all(transportPromises).then(() => {
 		process.exit(code);

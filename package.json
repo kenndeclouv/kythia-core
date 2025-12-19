@@ -14,9 +14,9 @@
 		"format": "biome format --write .",
 		"fix": "biome check --write .",
 		"prepare": "husky",
-		"build": "tsc && cp -r src/lang dist/",
-		"watch": "tsc -w && cp -r src/lang dist/",
-		"dev": "bun run build && yalc push"
+		"build": "tsc && cp -r src/lang dist/lang",
+		"watch": "tsc -w && cp -r src/lang dist/lang",
+		"dev": "bun format && rm -rf dist && bun run build && yalc push"
 	},
 	"lint-staged": {
 		"*.{js,json}": [
@@ -55,7 +55,6 @@
 		"axios": "^1.13.2",
 		"cli-color": "^2.0.4",
 		"commander": "^14.0.2",
-		"dotenv": "^16.6.1",
 		"figlet": "^1.9.3",
 		"glob": "^13.0.0",
 		"ioredis": "^5.7.0",

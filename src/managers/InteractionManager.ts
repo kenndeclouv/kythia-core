@@ -32,7 +32,6 @@ import {
 	type AnySelectMenuInteraction,
 	type UserContextMenuCommandInteraction,
 	type MessageContextMenuCommandInteraction,
-	type AutoModerationActionExecution,
 } from 'discord.js';
 import * as Sentry from '@sentry/node';
 import type { KythiaClient } from '../types/KythiaClient';
@@ -69,10 +68,6 @@ export class InteractionManager implements IInteractionManager {
 	public t: any;
 	public middlewareManager: any;
 
-	public ServerSetting: any;
-	public KythiaVoter: any;
-
-	public isTeam: (userId: string) => Promise<boolean>;
 	public isOwner: (userId: string) => boolean;
 
 	/**
@@ -108,9 +103,6 @@ export class InteractionManager implements IInteractionManager {
 
 		this.middlewareManager = this.container.middlewareManager;
 
-		this.ServerSetting = this.models.ServerSetting;
-		this.KythiaVoter = this.models.KythiaVoter;
-		this.isTeam = this.helpers.discord.isTeam;
 		this.isOwner = this.helpers.discord.isOwner;
 
 		if (!this.client.restartNoticeCooldowns) {
@@ -149,19 +141,19 @@ export class InteractionManager implements IInteractionManager {
 			},
 		);
 
-		this.client.on(
-			Events.AutoModerationActionExecution,
-			async (execution: AutoModerationActionExecution) => {
-				try {
-					await this._handleAutoModerationAction(execution);
-				} catch (err) {
-					this.logger.error(
-						`[AutoMod Logger] Error during execution for ${execution.guild.name}:`,
-						err,
-					);
-				}
-			},
-		);
+		// this.client.on(
+		// 	Events.AutoModerationActionExecution,
+		// 	async (execution: AutoModerationActionExecution) => {
+		// 		try {
+		// 			await this._handleAutoModerationAction(execution);
+		// 		} catch (err) {
+		// 			this.logger.error(
+		// 				`[AutoMod Logger] Error during execution for ${execution.guild.name}:`,
+		// 				err,
+		// 			);
+		// 		}
+		// 	},
+		// );
 	}
 
 	/**
@@ -395,72 +387,6 @@ export class InteractionManager implements IInteractionManager {
 		await this._checkRestartSchedule(interaction);
 
 		await command.execute(interaction, this.container);
-	}
-
-	private async _handleAutoModerationAction(
-		execution: AutoModerationActionExecution,
-	): Promise<void> {
-		const guildId = execution.guild.id;
-		const ruleName = execution.ruleTriggerType.toString();
-
-		const settings = await (this.ServerSetting as any).getCache({
-			guildId: guildId,
-		});
-		const locale = execution.guild.preferredLocale;
-
-		if (!settings || !settings.modLogChannelId) {
-			return;
-		}
-
-		const logChannelId = settings.modLogChannelId;
-		const logChannel = await execution.guild.channels
-			.fetch(logChannelId)
-			.catch(() => null);
-
-		if (logChannel?.isTextBased()) {
-			const embed = new EmbedBuilder()
-				.setColor('Red')
-				.setDescription(
-					await this.t(
-						null,
-						'common.automod',
-						{
-							ruleName: ruleName,
-						},
-						locale,
-					),
-				)
-				.addFields(
-					{
-						name: await this.t(null, 'common.automod.field.user', {}, locale),
-						value: `${execution.user?.tag} (${execution.userId})`,
-						inline: true,
-					},
-					{
-						name: await this.t(
-							null,
-							'common.automod.field.rule.trigger',
-							{},
-							locale,
-						),
-						value: `\`${ruleName}\``,
-						inline: true,
-					},
-				)
-				.setFooter({
-					text: await this.t(
-						null,
-						'common.embed.footer',
-						{
-							username: execution.guild.client.user.username,
-						},
-						locale,
-					),
-				})
-				.setTimestamp();
-
-			await logChannel.send({ embeds: [embed] });
-		}
 	}
 
 	private async _checkRestartSchedule(interaction: Interaction): Promise<void> {

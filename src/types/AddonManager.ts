@@ -66,6 +66,7 @@ export interface KythiaCommandModule {
 	subcommand?: boolean;
 	autocomplete?: KythiaAutocompleteHandler;
 	featureFlag?: string;
+	disableAutoPrefix?: boolean;
 	[key: string]: any;
 }
 
