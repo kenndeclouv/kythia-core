@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.5-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.4-beta...v0.12.5-beta) (2025-12-20)
+
+
+### 🔧 Changed
+
+* Wrap InteractionFactory.create logic in a try/catch block and update client type definition. ([572b1ef](https://github.com/kenndeclouv/kythia-core/commit/572b1ef4c73869bce688cf58b9b2b6e0ee19760d))
+
 ### [0.12.4-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.3-beta...v0.12.4-beta) (2025-12-19)
 
 
