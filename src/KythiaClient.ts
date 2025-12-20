@@ -4,7 +4,7 @@
  * @file src/client/kythiaClient.js
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.4-beta
+ * @version 0.12.5-beta
  *
  * @description
  * Factory function that initializes the Discord.js Client with high-performance

@@ -4,7 +4,7 @@
  * @file src/database/KythiaSequelize.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.4-beta
+ * @version 0.12.5-beta
  *
  * @description
  * Main Sequelize connection factory for the application.

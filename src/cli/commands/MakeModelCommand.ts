@@ -4,7 +4,7 @@
  * @file src/cli/commands/MakeModelCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.4-beta
+ * @version 0.12.5-beta
  *
  * @description
  * Generates new Sequelize model files extending `KythiaModel`.
@@ -58,7 +58,7 @@ export default class MakeModelCommand extends Command {
  * @type: Database Model
  * @copyright © ${new Date().getFullYear()} kenndeclouv
  * @assistant chaa & graa
- * @version 0.12.4-beta
+ * @version 0.12.5-beta
  */
 
 const { KythiaModel } = require("kythia-core");
