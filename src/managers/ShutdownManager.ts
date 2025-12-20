@@ -56,34 +56,46 @@ export class ShutdownManager implements IShutdownManager {
 	 * 🕵️‍♂️ [GLOBAL PATCH] Overrides global interval functions
 	 */
 	initializeGlobalIntervalTracker(): void {
-		if (!this._activeIntervals) this._activeIntervals = new Set();
+		try {
+			if (!this._activeIntervals) this._activeIntervals = new Set();
 
-		const originalSetInterval = global.setInterval;
-		const originalClearInterval = global.clearInterval;
+			const originalSetInterval = global.setInterval;
+			const originalClearInterval = global.clearInterval;
 
-		(global as any).setInterval = (
-			callback: (...args: any[]) => void,
-			ms?: number,
-			...args: any[]
-		): NodeJS.Timeout => {
-			const intervalId = originalSetInterval(callback, ms, ...args);
+			(global as any).setInterval = (
+				callback: (...args: any[]) => void,
+				ms?: number,
+				...args: any[]
+			): NodeJS.Timeout => {
+				const intervalId = originalSetInterval(callback, ms, ...args);
 
-			this._activeIntervals.add(intervalId);
-			return intervalId;
-		};
+				this._activeIntervals.add(intervalId);
+				return intervalId;
+			};
 
-		(global as any).clearInterval = (
-			intervalId: NodeJS.Timeout | undefined,
-		): void => {
-			if (intervalId) {
-				originalClearInterval(intervalId);
-				this._activeIntervals.delete(intervalId);
-			}
-		};
+			(global as any).clearInterval = (
+				intervalId: NodeJS.Timeout | undefined,
+			): void => {
+				if (intervalId) {
+					originalClearInterval(intervalId);
+					this._activeIntervals.delete(intervalId);
+				}
+			};
 
-		this.logger.info(
-			'✅ Global setInterval/clearInterval has been patched for tracking.',
-		);
+			this.logger.info(
+				'✅ Global setInterval/clearInterval has been patched for tracking.',
+			);
+		} catch (error: any) {
+			this.logger.error('Failed to initialize global interval tracker:', error);
+			this.container.telemetry?.report(
+				'error',
+				'Global Interval Tracker Initialization Failed',
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+		}
 	}
 
 	disableRecursively(components: any[]): any[] {
@@ -105,104 +117,133 @@ export class ShutdownManager implements IShutdownManager {
 	 * track ANY message with components, regardless of how its interactions are handled.
 	 */
 	initializeShutdownCollectors(): void {
-		if (!this._messagesWithActiveCollectors)
-			this._messagesWithActiveCollectors = new Set();
+		try {
+			if (!this._messagesWithActiveCollectors)
+				this._messagesWithActiveCollectors = new Set();
 
-		if (!this._collectorPatched) {
-			const DiscordMessage = require('discord.js').Message;
-			const origCreateCollector =
-				DiscordMessage.prototype.createMessageComponentCollector;
+			if (!this._collectorPatched) {
+				const DiscordMessage = require('discord.js').Message;
+				const origCreateCollector =
+					DiscordMessage.prototype.createMessageComponentCollector;
 
-			const botInstance = this;
+				const botInstance = this;
 
-			DiscordMessage.prototype.createMessageComponentCollector = function (
-				this: Message,
-				...args: any[]
-			) {
-				const collector = origCreateCollector.apply(this, args);
+				DiscordMessage.prototype.createMessageComponentCollector = function (
+					this: Message,
+					...args: any[]
+				) {
+					const collector = origCreateCollector.apply(this, args);
 
-				if (botInstance._messagesWithActiveCollectors) {
-					botInstance._messagesWithActiveCollectors.add(this);
-				}
-
-				collector.once('end', () => {
 					if (botInstance._messagesWithActiveCollectors) {
-						botInstance._messagesWithActiveCollectors.delete(this);
+						botInstance._messagesWithActiveCollectors.add(this);
 					}
-				});
 
-				return collector;
-			};
-			this._collectorPatched = true;
-			this.logger.info(
-				'✅ Corrected collector-based component tracking has been patched.',
-			);
-		}
+					collector.once('end', () => {
+						if (botInstance._messagesWithActiveCollectors) {
+							botInstance._messagesWithActiveCollectors.delete(this);
+						}
+					});
 
-		if (!this._cleanupAttached) {
-			const cleanupAndFlush = async (callback: () => void) => {
-				this.logger.info('🛑 Graceful shutdown initiated...');
+					return collector;
+				};
+				this._collectorPatched = true;
+				this.logger.info(
+					'✅ Corrected collector-based component tracking has been patched.',
+				);
+			}
 
-				if (this._activeIntervals && this._activeIntervals.size > 0) {
-					this.logger.info(
-						`🛑 Halting ${this._activeIntervals.size} active global intervals...`,
-					);
-					for (const intervalId of this._activeIntervals) {
-						clearInterval(intervalId);
-					}
-				}
+			if (!this._cleanupAttached) {
+				const cleanupAndFlush = async (callback: () => void) => {
+					this.logger.info('🛑 Graceful shutdown initiated...');
 
-				const messagesToProcess = this._messagesWithActiveCollectors;
-
-				if (messagesToProcess && messagesToProcess.size > 0) {
-					this.logger.info(
-						`🛑 Disabling components on up to ${messagesToProcess.size} messages.`,
-					);
-					const editPromises: Promise<any>[] = [];
-
-					for (const msg of messagesToProcess) {
-						if (!msg.editable || !msg.components || msg.components.length === 0)
-							continue;
-						try {
-							const rawComponents = msg.components.map((c) => c.toJSON());
-							const disabledComponents = this.disableRecursively(rawComponents);
-							editPromises.push(
-								msg.edit({ components: disabledComponents }).catch(() => {}),
-							);
-						} catch (error) {
-							this.logger.error(error);
+					if (this._activeIntervals && this._activeIntervals.size > 0) {
+						this.logger.info(
+							`🛑 Halting ${this._activeIntervals.size} active global intervals...`,
+						);
+						for (const intervalId of this._activeIntervals) {
+							clearInterval(intervalId);
 						}
 					}
-					await Promise.allSettled(editPromises);
-				}
-				this.logger.info('✅ Component cleanup complete.');
 
-				this.logger.info('🚰 Flushing remaining logs...');
-				this.logger.on('finish', () => {
-					console.log(
-						'⏳ Logger has flushed. Kythia is now safely shutting down.',
+					const messagesToProcess = this._messagesWithActiveCollectors;
+
+					if (messagesToProcess && messagesToProcess.size > 0) {
+						this.logger.info(
+							`🛑 Disabling components on up to ${messagesToProcess.size} messages.`,
+						);
+						const editPromises: Promise<any>[] = [];
+
+						for (const msg of messagesToProcess) {
+							if (
+								!msg.editable ||
+								!msg.components ||
+								msg.components.length === 0
+							)
+								continue;
+							try {
+								const rawComponents = msg.components.map((c) => c.toJSON());
+								const disabledComponents =
+									this.disableRecursively(rawComponents);
+								editPromises.push(
+									msg.edit({ components: disabledComponents }).catch(() => {}),
+								);
+							} catch (error) {
+								this.logger.error(error);
+							}
+						}
+						await Promise.allSettled(editPromises);
+					}
+					this.logger.info('✅ Component cleanup complete.');
+
+					this.logger.info('🚰 Flushing remaining logs...');
+					this.logger.on('finish', () => {
+						console.log(
+							'⏳ Logger has flushed. Kythia is now safely shutting down.',
+						);
+						if (callback) callback();
+					});
+					this.logger.end();
+					setTimeout(() => {
+						console.log('⏳ Logger flush timeout. Forcing exit.');
+						if (callback) callback();
+					}, 4000);
+				};
+
+				exitHook(cleanupAndFlush);
+				process.on('unhandledRejection', (error: any) => {
+					this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
+					this.container.telemetry?.report(
+						'error',
+						'Unhandled Promise Rejection',
+						{
+							message: error.message,
+							stack: error.stack,
+						},
 					);
-					if (callback) callback();
 				});
-				this.logger.end();
-				setTimeout(() => {
-					console.log('⏳ Logger flush timeout. Forcing exit.');
-					if (callback) callback();
-				}, 4000);
-			};
+				process.on('uncaughtException', (error: any) => {
+					this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
+					this.container.telemetry?.report('error', 'Uncaught Exception', {
+						message: error.message,
+						stack: error.stack,
+					});
+					process.exit(1);
+				});
 
-			exitHook(cleanupAndFlush);
-			process.on('unhandledRejection', (error) => {
-				this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
-			});
-			process.on('uncaughtException', (error) => {
-				this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
-				process.exit(1);
-			});
-
-			this._cleanupAttached = true;
-			this.logger.info(
-				'🛡️  Graceful shutdown and error handlers are now active.',
+				this._cleanupAttached = true;
+				this.logger.info(
+					'🛡️  Graceful shutdown and error handlers are now active.',
+				);
+			}
+		} catch (error: any) {
+			this.logger.error('Failed to initialize shutdown collectors:', error);
+			this.container.telemetry?.report(
+				'error',
+				'Shutdown Collector Initialization Failed',
+				{
+					message: error.message,
+					stack: error.stack,
+				},
 			);
 		}
 	}

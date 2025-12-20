@@ -83,12 +83,27 @@ export default class AddonManager implements IAddonManager {
 	 * @param {Function} handler - The handler function to execute
 	 */
 	registerButtonHandler(customId: string, handler: KythiaButtonHandler) {
-		if (this.buttonHandlers.has(customId)) {
-			this.logger.warn(
-				`[REGISTRATION] Warning: Button handler for [${customId}] already exists and will be overwritten.`,
+		try {
+			if (this.buttonHandlers.has(customId)) {
+				this.logger.warn(
+					`[REGISTRATION] Warning: Button handler for [${customId}] already exists and will be overwritten.`,
+				);
+			}
+			this.buttonHandlers.set(customId, handler);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register button handler for [${customId}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Button Handler Failed: [${customId}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
 			);
 		}
-		this.buttonHandlers.set(customId, handler);
 	}
 	/**
 	 * 🔽 Register Select Menu Handler
@@ -100,12 +115,27 @@ export default class AddonManager implements IAddonManager {
 		customIdPrefix: string,
 		handler: KythiaSelectMenuHandler,
 	) {
-		if (this.selectMenuHandlers.has(customIdPrefix)) {
-			this.logger.warn(
-				`[REGISTRATION] Warning: Select menu handler for [${customIdPrefix}] already exists and will be overwritten.`,
+		try {
+			if (this.selectMenuHandlers.has(customIdPrefix)) {
+				this.logger.warn(
+					`[REGISTRATION] Warning: Select menu handler for [${customIdPrefix}] already exists and will be overwritten.`,
+				);
+			}
+			this.selectMenuHandlers.set(customIdPrefix, handler);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register select menu handler for [${customIdPrefix}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Select Menu Handler Failed: [${customIdPrefix}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
 			);
 		}
-		this.selectMenuHandlers.set(customIdPrefix, handler);
 	}
 
 	/**
@@ -115,12 +145,27 @@ export default class AddonManager implements IAddonManager {
 	 * @param {Function} handler - The handler function to execute
 	 */
 	registerModalHandler(customIdPrefix: string, handler: KythiaModalHandler) {
-		if (this.modalHandlers.has(customIdPrefix)) {
-			this.logger.warn(
-				`[REGISTRATION] Warning: Modal handler for [${customIdPrefix}] already exists and will be overwritten.`,
+		try {
+			if (this.modalHandlers.has(customIdPrefix)) {
+				this.logger.warn(
+					`[REGISTRATION] Warning: Modal handler for [${customIdPrefix}] already exists and will be overwritten.`,
+				);
+			}
+			this.modalHandlers.set(customIdPrefix, handler);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register modal handler for [${customIdPrefix}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Modal Handler Failed: [${customIdPrefix}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
 			);
 		}
-		this.modalHandlers.set(customIdPrefix, handler);
 	}
 
 	/**
@@ -133,12 +178,27 @@ export default class AddonManager implements IAddonManager {
 		commandName: string,
 		handler: KythiaAutocompleteHandler,
 	): void {
-		if (this.autocompleteHandlers.has(commandName)) {
-			this.logger.warn(
-				`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists.`,
+		try {
+			if (this.autocompleteHandlers.has(commandName)) {
+				this.logger.warn(
+					`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists.`,
+				);
+			}
+			this.autocompleteHandlers.set(commandName, handler);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register autocomplete handler for [${commandName}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Autocomplete Handler Failed: [${commandName}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
 			);
 		}
-		this.autocompleteHandlers.set(commandName, handler);
 	}
 
 	/**
@@ -164,8 +224,16 @@ export default class AddonManager implements IAddonManager {
 	private _instantiateBaseCommand(CommandClass: any): any {
 		try {
 			return new CommandClass(this.container);
-		} catch (error) {
+		} catch (error: any) {
 			this.logger.error(`Failed to instantiate BaseCommand class:`, error);
+			this.container.telemetry?.report(
+				'error',
+				'Instantiate BaseCommand Failed',
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
 			throw error;
 		}
 	}
@@ -228,58 +296,77 @@ export default class AddonManager implements IAddonManager {
 		permissionDefaults: Record<string, any> = {},
 		options: { folderName?: string } = {},
 	): CommandRegistrationSummary | null {
-		if (this._isBaseCommandClass(module)) {
-			module = this._instantiateBaseCommand(module);
-		}
+		try {
+			if (this._isBaseCommandClass(module)) {
+				module = this._instantiateBaseCommand(module);
+			}
 
-		const data =
-			module.data || module.slashCommand || module.contextMenuCommand;
-		if (!module || !data) return null;
+			const data =
+				module.data || module.slashCommand || module.contextMenuCommand;
+			if (!module || !data) return null;
 
-		let builderClass: any;
+			let builderClass: any;
 
-		if (module.data instanceof ContextMenuCommandBuilder) {
-			builderClass = ContextMenuCommandBuilder;
-		} else {
-			builderClass = SlashCommandBuilder;
-		}
+			if (module.data instanceof ContextMenuCommandBuilder) {
+				builderClass = ContextMenuCommandBuilder;
+			} else {
+				builderClass = SlashCommandBuilder;
+			}
 
-		const commandBuilder = this._createBuilderFromData(
-			module.data,
-			builderClass,
-		);
-
-		const commandName = commandBuilder.name;
-		const category =
-			options.folderName || path.basename(path.dirname(filePath));
-
-		const categoryDefaults = permissionDefaults[category] || {};
-		const finalCommand = {
-			...categoryDefaults,
-			...module,
-		};
-
-		this.commandCategoryMap.set(commandName, category);
-		if (commandNamesSet.has(commandName)) {
-			throw new Error(
-				`Duplicate command name detected: "${commandName}" in ${filePath}`,
+			const commandBuilder = this._createBuilderFromData(
+				module.data,
+				builderClass,
 			);
+
+			const commandName = commandBuilder.name;
+			const category =
+				options.folderName || path.basename(path.dirname(filePath));
+
+			const categoryDefaults = permissionDefaults[category] || {};
+			const finalCommand = {
+				...categoryDefaults,
+				...module,
+			};
+
+			this.commandCategoryMap.set(commandName, category);
+			if (commandNamesSet.has(commandName)) {
+				throw new Error(
+					`Duplicate command name detected: "${commandName}" in ${filePath}`,
+				);
+			}
+
+			commandNamesSet.add(commandName);
+
+			this.client.commands.set(commandName, finalCommand);
+			commandDataForDeployment.push(commandBuilder.toJSON());
+
+			if (typeof finalCommand.autocomplete === 'function') {
+				this.registerAutocompleteHandler(
+					commandName,
+					finalCommand.autocomplete,
+				);
+			}
+
+			return {
+				type: 'single',
+				name: commandName,
+				folder: category,
+			};
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register command from [${filePath}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Command Failed: [${filePath}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+			return null;
 		}
-
-		commandNamesSet.add(commandName);
-
-		this.client.commands.set(commandName, finalCommand);
-		commandDataForDeployment.push(commandBuilder.toJSON());
-
-		if (typeof finalCommand.autocomplete === 'function') {
-			this.registerAutocompleteHandler(commandName, finalCommand.autocomplete);
-		}
-
-		return {
-			type: 'single',
-			name: commandName,
-			folder: category,
-		};
 	}
 
 	/**

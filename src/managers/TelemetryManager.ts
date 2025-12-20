@@ -54,18 +54,33 @@ export class TelemetryManager {
 	}
 
 	private getSystemSpec() {
-		const cpus = os.cpus();
-		const ramTotal = `${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)} GB`;
+		try {
+			const cpus = os.cpus();
+			const ramTotal = `${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)} GB`;
 
-		return {
-			platform: `${os.type()} ${os.release()} (${os.arch()})`,
-			hostname: os.hostname(),
-			cpu: cpus.length > 0 ? cpus[0].model : 'Unknown CPU',
-			cores: cpus.length,
-			ram: ramTotal,
-			nodeVersion: process.version,
-			botVersion: this.version,
-		};
+			return {
+				platform: `${os.type()} ${os.release()} (${os.arch()})`,
+				hostname: os.hostname(),
+				cpu: cpus.length > 0 ? cpus[0].model : 'Unknown CPU',
+				cores: cpus.length,
+				ram: ramTotal,
+				nodeVersion: process.version,
+				botVersion: this.version,
+			};
+		} catch (error: any) {
+			this.logger.error('Failed to get system specs:', error);
+			// We can't report this error via telemetry because this method is used by verifyStatus which is used by telemetry.
+			// Reporting here could cause infinite recursion if verifyStatus fails.
+			return {
+				platform: 'Unknown',
+				hostname: 'Unknown',
+				cpu: 'Unknown',
+				cores: 0,
+				ram: 'Unknown',
+				nodeVersion: process.version,
+				botVersion: this.version,
+			};
+		}
 	}
 
 	public async verifyStatus(): Promise<
@@ -127,15 +142,20 @@ export class TelemetryManager {
 		message: string,
 		metadata?: any,
 	) {
-		this.logQueue.push({
-			level,
-			message,
-			metadata: metadata ? JSON.stringify(metadata) : null,
-			timestamp: Date.now(),
-		});
+		try {
+			this.logQueue.push({
+				level,
+				message,
+				metadata: metadata ? JSON.stringify(metadata) : null,
+				timestamp: Date.now(),
+			});
 
-		if (this.logQueue.length >= 50) {
-			this.flush();
+			if (this.logQueue.length >= 50) {
+				this.flush();
+			}
+		} catch (error) {
+			// If reporting fails, we shouldn't try to report it again to avoid loops
+			this.logger.warn('Failed to queue telemetry log:', error);
 		}
 	}
 
@@ -158,54 +178,78 @@ export class TelemetryManager {
 	}
 
 	public startAutoFlush() {
-		this.flushInterval = setInterval(
-			() => {
-				this.flush();
-			},
-			5 * 60 * 1000,
-		);
+		try {
+			this.flushInterval = setInterval(
+				() => {
+					this.flush();
+				},
+				5 * 60 * 1000,
+			);
+		} catch (error: any) {
+			this.logger.error('Failed to start auto flush:', error);
+			this.report('error', 'Auto Flush Start Failed', {
+				message: error.message,
+				stack: error.stack,
+			});
+		}
 	}
 
 	public startHeartbeat() {
-		if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+		try {
+			if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
 
-		const minMs = 10 * 60 * 1000;
-		const maxMs = 20 * 60 * 1000;
-		const randomMs = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+			const minMs = 10 * 60 * 1000;
+			const maxMs = 20 * 60 * 1000;
+			const randomMs = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
 
-		this.heartbeatInterval = setInterval(async () => {
-			this.logger.debug('💓 Checking License Status...');
+			this.heartbeatInterval = setInterval(async () => {
+				try {
+					this.logger.debug('💓 Checking License Status...');
 
-			const status = await this.verifyStatus();
+					const status = await this.verifyStatus();
 
-			if (status === 'VALID') {
-				if (this.networkFailures > 0) {
-					this.logger.info('✅ Reconnected to License Server!');
+					if (status === 'VALID') {
+						if (this.networkFailures > 0) {
+							this.logger.info('✅ Reconnected to License Server!');
+						}
+						this.networkFailures = 0;
+					} else if (status === 'INVALID') {
+						this.logger.error('💀 LICENSE REVOKED/INVALID. SHUTTING DOWN.');
+						await this.report('error', 'License Revoked (Heartbeat Check)');
+						await this.flush();
+						process.exit(1);
+					} else if (status === 'NETWORK_ERROR' || status === 'SERVER_ERROR') {
+						this.networkFailures++;
+
+						const msg =
+							status === 'SERVER_ERROR'
+								? `⚠️ License Server Error (5xx). Attempt ${this.networkFailures}/${this.MAX_NETWORK_FAILURES}`
+								: `⚠️ Cannot reach license server. Attempt ${this.networkFailures}/${this.MAX_NETWORK_FAILURES}`;
+
+						this.logger.warn(msg);
+
+						if (this.networkFailures >= this.MAX_NETWORK_FAILURES) {
+							this.logger.error(
+								'💀 Unable to verify license for too long. Shutting down for security.',
+							);
+
+							process.exit(1);
+						}
+					}
+				} catch (innerError: any) {
+					this.logger.error('Error during heartbeat check:', innerError);
+					this.report('error', 'Heartbeat Check Failed', {
+						message: innerError.message,
+						stack: innerError.stack,
+					});
 				}
-				this.networkFailures = 0;
-			} else if (status === 'INVALID') {
-				this.logger.error('💀 LICENSE REVOKED/INVALID. SHUTTING DOWN.');
-				await this.report('error', 'License Revoked (Heartbeat Check)');
-				await this.flush();
-				process.exit(1);
-			} else if (status === 'NETWORK_ERROR' || status === 'SERVER_ERROR') {
-				this.networkFailures++;
-
-				const msg =
-					status === 'SERVER_ERROR'
-						? `⚠️ License Server Error (5xx). Attempt ${this.networkFailures}/${this.MAX_NETWORK_FAILURES}`
-						: `⚠️ Cannot reach license server. Attempt ${this.networkFailures}/${this.MAX_NETWORK_FAILURES}`;
-
-				this.logger.warn(msg);
-
-				if (this.networkFailures >= this.MAX_NETWORK_FAILURES) {
-					this.logger.error(
-						'💀 Unable to verify license for too long. Shutting down for security.',
-					);
-
-					process.exit(1);
-				}
-			}
-		}, randomMs);
+			}, randomMs);
+		} catch (error: any) {
+			this.logger.error('Failed to start heartbeat:', error);
+			this.report('error', 'Heartbeat Start Failed', {
+				message: error.message,
+				stack: error.stack,
+			});
+		}
 	}
 }

@@ -28,64 +28,100 @@ export default class MiddlewareManager {
 	}
 
 	public async loadMiddlewares(): Promise<void> {
-		this.middlewares = [];
+		try {
+			this.middlewares = [];
 
-		const coreMiddlewarePath = path.join(__dirname, '..', 'middlewares');
+			const coreMiddlewarePath = path.join(__dirname, '..', 'middlewares');
 
-		if (fs.existsSync(coreMiddlewarePath)) {
-			await this._loadFromPath(coreMiddlewarePath, 'core');
-		} else {
-			this.logger.warn(
-				`⚠️ Core middlewares path not found: ${coreMiddlewarePath}`,
-			);
-		}
-
-		const appRoot = this.container.appRoot || process.cwd();
-		const userPaths = [
-			path.join(appRoot, 'src', 'middlewares'),
-			path.join(appRoot, 'middlewares'),
-		];
-
-		for (const userPath of userPaths) {
-			if (fs.existsSync(userPath) && userPath !== coreMiddlewarePath) {
-				await this._loadFromPath(userPath, 'bot');
+			if (fs.existsSync(coreMiddlewarePath)) {
+				await this._loadFromPath(coreMiddlewarePath, 'core');
+			} else {
+				this.logger.warn(
+					`⚠️ Core middlewares path not found: ${coreMiddlewarePath}`,
+				);
 			}
+
+			const appRoot = this.container.appRoot || process.cwd();
+			const userPaths = [
+				path.join(appRoot, 'src', 'middlewares'),
+				path.join(appRoot, 'middlewares'),
+			];
+
+			for (const userPath of userPaths) {
+				if (fs.existsSync(userPath) && userPath !== coreMiddlewarePath) {
+					await this._loadFromPath(userPath, 'bot');
+				}
+			}
+
+			this.middlewares.sort((a, b) => (a.priority || 10) - (b.priority || 10));
+
+			this.logger.info(
+				`🛡️  Total Loaded: ${this.middlewares.length} middlewares.`,
+			);
+		} catch (error: any) {
+			this.logger.error('Failed to load middlewares:', error);
+			this.container.telemetry?.report('error', 'Middleware Loading Failed', {
+				message: error.message,
+				stack: error.stack,
+			});
 		}
-
-		this.middlewares.sort((a, b) => (a.priority || 10) - (b.priority || 10));
-
-		this.logger.info(
-			`🛡️  Total Loaded: ${this.middlewares.length} middlewares.`,
-		);
 	}
 
 	private async _loadFromPath(dirPath: string, source: string): Promise<void> {
-		const files = fs
-			.readdirSync(dirPath)
-			.filter(
-				(f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
-			);
+		try {
+			const files = fs
+				.readdirSync(dirPath)
+				.filter(
+					(f) =>
+						(f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
+				);
 
-		let loadedCount = 0;
+			let loadedCount = 0;
 
-		for (const file of files) {
-			try {
-				const middleware = require(path.join(dirPath, file));
-				const mw = middleware.default || middleware;
+			for (const file of files) {
+				try {
+					const middleware = require(path.join(dirPath, file));
+					const mw = middleware.default || middleware;
 
-				if (!mw.name || typeof mw.execute !== 'function') {
-					this.logger.warn(`⚠️ Middleware ${file} invalid structure. Skipping.`);
-					continue;
+					if (!mw.name || typeof mw.execute !== 'function') {
+						this.logger.warn(
+							`⚠️ Middleware ${file} invalid structure. Skipping.`,
+						);
+						continue;
+					}
+
+					this.middlewares.push(mw as KythiaMiddleware);
+					loadedCount++;
+				} catch (err: any) {
+					this.logger.error(`❌ Failed to load middleware ${file}:`, err);
+					this.container.telemetry?.report(
+						'error',
+						`Middleware Load Failed: [${file}]`,
+						{
+							message: err.message,
+							stack: err.stack,
+							source,
+						},
+					);
 				}
-
-				this.middlewares.push(mw as KythiaMiddleware);
-				loadedCount++;
-			} catch (err) {
-				this.logger.error(`❌ Failed to load middleware ${file}:`, err);
 			}
-		}
 
-		this.logger.info(`🛡️  Loaded ${loadedCount} middlewares from ${source}`);
+			this.logger.info(`🛡️  Loaded ${loadedCount} middlewares from ${source}`);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to read middleware directory [${dirPath}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Middleware Directory Read Failed: [${dirPath}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+					source,
+				},
+			);
+		}
 	}
 
 	public async handle(
@@ -100,8 +136,17 @@ export default class MiddlewareManager {
 					this.container,
 				);
 				if (!shouldContinue) return false;
-			} catch (err) {
+			} catch (err: any) {
 				this.logger.error(`❌ Error in middleware ${middleware.name}:`, err);
+				this.container.telemetry?.report(
+					'error',
+					`Middleware Execution Failed: [${middleware.name}]`,
+					{
+						message: err.message,
+						stack: err.stack,
+						command: command.name,
+					},
+				);
 				return false;
 			}
 		}

@@ -24,7 +24,10 @@ export default class TranslatorManager {
 
 	private languageResolver: LanguageResolver = async () => null;
 
+	public container: KythiaContainer;
+
 	constructor({ container }: { container: KythiaContainer }) {
+		this.container = container;
 		this.logger = container.logger;
 		this.config = container.kythiaConfig;
 
@@ -50,44 +53,57 @@ export default class TranslatorManager {
 	}
 
 	public loadLocalesFromDir(dirPath: string): void {
-		if (!fs.existsSync(dirPath)) return;
+		try {
+			if (!fs.existsSync(dirPath)) return;
 
-		const langFiles = fs
-			.readdirSync(dirPath)
-			.filter((file) => file.endsWith('.json'));
+			const langFiles = fs
+				.readdirSync(dirPath)
+				.filter((file) => file.endsWith('.json'));
 
-		for (const file of langFiles) {
-			try {
-				const langCode = file.replace('.json', '');
-				const filePath = path.join(dirPath, file);
-				const newData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+			for (const file of langFiles) {
+				try {
+					const langCode = file.replace('.json', '');
+					const filePath = path.join(dirPath, file);
+					const newData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-				if (this.locales.has(langCode)) {
-					const existingData = this.locales.get(langCode);
-					const mergedData = this._deepMerge(existingData, newData);
-					this.locales.set(langCode, mergedData);
+					if (this.locales.has(langCode)) {
+						const existingData = this.locales.get(langCode);
+						const mergedData = this._deepMerge(existingData, newData);
+						this.locales.set(langCode, mergedData);
 
-					let source = dirPath;
-					if (dirPath.includes('addons')) {
-						const addonName = path.basename(path.dirname(dirPath));
-						source = `addon ${addonName}`;
-					} else if (dirPath.endsWith('src/lang')) {
-						source = 'core';
-					} else if (dirPath.endsWith('lang')) {
-						source = 'app';
+						let source = dirPath;
+						if (dirPath.includes('addons')) {
+							const addonName = path.basename(path.dirname(dirPath));
+							source = `addon ${addonName}`;
+						} else if (dirPath.endsWith('src/lang')) {
+							source = 'core';
+						} else if (dirPath.endsWith('lang')) {
+							source = 'app';
+						}
+
+						this.logger.debug(`🌐 Merged locale ${langCode} from ${source}`);
+					} else {
+						this.locales.set(langCode, newData);
+						this.logger.info(`🌐 Loaded New Language: ${langCode}`);
 					}
-
-					this.logger.debug(`🌐 Merged locale ${langCode} from ${source}`);
-				} else {
-					this.locales.set(langCode, newData);
-					this.logger.info(`🌐 Loaded New Language: ${langCode}`);
+				} catch (err: any) {
+					this.logger.error(
+						`Error loading language file ${file} from ${dirPath}:`,
+						err,
+					);
+					// We can't use container.telemetry here because TranslatorManager is initialized before TelemetryManager in some cases,
+					// or doesn't have direct access to container in the same way.
+					// However, based on the constructor, it DOES have access to container.
+					// But TranslatorManager properties are defined as private/public without container being a public property on the class itself,
+					// only passed in constructor.
+					// Wait, the constructor assigns `this.logger = container.logger`.
+					// It does NOT assign `this.container = container`.
+					// So I cannot access `this.container.telemetry`.
+					// I should check if I can add `container` to the class properties.
 				}
-			} catch (err) {
-				this.logger.error(
-					`Error loading language file ${file} from ${dirPath}:`,
-					err,
-				);
 			}
+		} catch (error: any) {
+			this.logger.error(`Failed to read locale directory [${dirPath}]:`, error);
 		}
 	}
 
@@ -107,50 +123,65 @@ export default class TranslatorManager {
 		variables: TranslationVariables = {},
 		forceLang: string | null = null,
 	): Promise<string> {
-		let lang: string | null = forceLang;
+		try {
+			let lang: string | null = forceLang;
 
-		if (!lang && interaction && interaction.guildId) {
-			if (this.guildLanguageCache.has(interaction.guildId)) {
-				lang = this.guildLanguageCache.get(interaction.guildId) || null;
-			} else {
-				try {
-					const resolvedLang = await this.languageResolver(interaction.guildId);
+			if (!lang && interaction && interaction.guildId) {
+				if (this.guildLanguageCache.has(interaction.guildId)) {
+					lang = this.guildLanguageCache.get(interaction.guildId) || null;
+				} else {
+					try {
+						const resolvedLang = await this.languageResolver(
+							interaction.guildId,
+						);
 
-					lang = resolvedLang || this.defaultLang;
+						lang = resolvedLang || this.defaultLang;
 
-					if (lang) this.guildLanguageCache.set(interaction.guildId, lang);
-				} catch (_e) {
-					lang = this.defaultLang;
+						if (lang) this.guildLanguageCache.set(interaction.guildId, lang);
+					} catch (_e) {
+						lang = this.defaultLang;
+					}
 				}
 			}
-		}
 
-		if (!lang) lang = this.defaultLang;
+			if (!lang) lang = this.defaultLang;
 
-		let primaryLangFile = this.locales.get(lang);
-		const fallbackLangFile = this.locales.get(this.defaultLang);
+			let primaryLangFile = this.locales.get(lang);
+			const fallbackLangFile = this.locales.get(this.defaultLang);
 
-		if (!primaryLangFile) {
-			lang = this.defaultLang;
-			primaryLangFile = fallbackLangFile;
-		}
+			if (!primaryLangFile) {
+				lang = this.defaultLang;
+				primaryLangFile = fallbackLangFile;
+			}
 
-		let translation = this._getNestedValue(primaryLangFile, key);
+			let translation = this._getNestedValue(primaryLangFile, key);
 
-		if (translation === undefined && fallbackLangFile) {
-			translation = this._getNestedValue(fallbackLangFile, key);
-		}
+			if (translation === undefined && fallbackLangFile) {
+				translation = this._getNestedValue(fallbackLangFile, key);
+			}
 
-		if (translation === undefined) {
+			if (translation === undefined) {
+				return `[${key}]`;
+			}
+
+			for (const [variable, value] of Object.entries(variables)) {
+				const regex = new RegExp(`{${variable}}`, 'g');
+				translation = translation.replace(regex, String(value));
+			}
+
+			return translation;
+		} catch (error: any) {
+			this.logger.error(`Translation failed for key [${key}]:`, error);
+			this.container.telemetry?.report(
+				'error',
+				`Translation Failed: [${key}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
 			return `[${key}]`;
 		}
-
-		for (const [variable, value] of Object.entries(variables)) {
-			const regex = new RegExp(`{${variable}}`, 'g');
-			translation = translation.replace(regex, String(value));
-		}
-
-		return translation;
 	}
 
 	public getLocales() {

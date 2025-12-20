@@ -594,14 +594,14 @@ class Kythia {
 		try {
 			const shouldDeploy = !process.argv.includes('--dev');
 
-			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
+			// this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
 
-			if (
-				this.helpers?.fonts &&
-				typeof this.helpers.fonts.loadFonts === 'function'
-			) {
-				this.helpers.fonts.loadFonts({ logger: this.logger });
-			}
+			// if (
+			// 	this.helpers?.fonts &&
+			// 	typeof this.helpers.fonts.loadFonts === 'function'
+			// ) {
+			// 	this.helpers.fonts.loadFonts({ logger: this.logger });
+			// }
 
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Translator System ]▬▬▬▬▬▬▬▬▬▬▬');
 

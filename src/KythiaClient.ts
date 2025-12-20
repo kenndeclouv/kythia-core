@@ -22,6 +22,13 @@ import type { KythiaClient as IKythiaClient } from './types';
 
 export default function kythiaClient(): IKythiaClient {
 	const client = new Client({
+		rest: {
+			timeout: 60000,
+			retries: 10,
+		},
+		ws: {
+			large_threshold: 250,
+		},
 		intents: [
 			GatewayIntentBits.Guilds,
 			GatewayIntentBits.GuildMessages,

@@ -135,25 +135,20 @@ export class InteractionManager implements IInteractionManager {
 					) {
 						await this._handleContextMenuCommand(interaction);
 					}
-				} catch (error) {
+				} catch (error: any) {
 					await this._handleInteractionError(interaction, error);
+					this.container.telemetry?.report(
+						'error',
+						'Interaction Handling Failed',
+						{
+							message: error.message,
+							stack: error.stack,
+							interactionType: interaction.type,
+						},
+					);
 				}
 			},
 		);
-
-		// this.client.on(
-		// 	Events.AutoModerationActionExecution,
-		// 	async (execution: AutoModerationActionExecution) => {
-		// 		try {
-		// 			await this._handleAutoModerationAction(execution);
-		// 		} catch (err) {
-		// 			this.logger.error(
-		// 				`[AutoMod Logger] Error during execution for ${execution.guild.name}:`,
-		// 				err,
-		// 			);
-		// 		}
-		// 	},
-		// );
 	}
 
 	/**
@@ -163,204 +158,271 @@ export class InteractionManager implements IInteractionManager {
 	private async _handleChatInputCommand(
 		interaction: ChatInputCommandInteraction,
 	): Promise<void> {
-		let commandKey = interaction.commandName;
-		const group = interaction.options.getSubcommandGroup(false);
-		const subcommand = interaction.options.getSubcommand(false);
+		try {
+			let commandKey = interaction.commandName;
+			const group = interaction.options.getSubcommandGroup(false);
+			const subcommand = interaction.options.getSubcommand(false);
 
-		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
-		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
+			if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
+			else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
-		let command = this.client.commands.get(commandKey);
+			let command = this.client.commands.get(commandKey);
 
-		if (!command && (subcommand || group)) {
-			command = this.client.commands.get(interaction.commandName);
-		}
-
-		if (!command) {
-			this.logger.error(`Command not found for key: ${commandKey}`);
-			await interaction.reply({
-				content: await this.t(interaction, 'common.error.command.not.found'),
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		if (this.middlewareManager) {
-			const canRun = await this.middlewareManager.handle(interaction, command);
-			if (!canRun) return;
-		}
-
-		if (typeof command.execute === 'function') {
-			if (!(interaction as any).logger) {
-				(interaction as any).logger = this.logger;
+			if (!command && (subcommand || group)) {
+				command = this.client.commands.get(interaction.commandName);
 			}
 
-			if (this.container && !this.container.logger) {
-				this.container.logger = this.logger;
+			if (!command) {
+				this.logger.error(`Command not found for key: ${commandKey}`);
+				await interaction.reply({
+					content: await this.t(interaction, 'common.error.command.not.found'),
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
 			}
 
+			if (this.middlewareManager) {
+				const canRun = await this.middlewareManager.handle(
+					interaction,
+					command,
+				);
+				if (!canRun) return;
+			}
+
+			if (typeof command.execute === 'function') {
+				if (!(interaction as any).logger) {
+					(interaction as any).logger = this.logger;
+				}
+
+				if (this.container && !this.container.logger) {
+					this.container.logger = this.logger;
+				}
+
+				this.container.telemetry?.report(
+					'info',
+					`Command Executed: /${commandKey}`,
+					{
+						user: `${interaction.user.tag} (${interaction.user.id})`,
+						guild: interaction.guild
+							? `${interaction.guild.name} (${interaction.guild.id})`
+							: 'DM',
+						channel: interaction.channelId,
+					},
+				);
+
+				if (command.execute.length === 2) {
+					await command.execute(interaction, this.container);
+				} else {
+					await command.execute(interaction);
+				}
+
+				await this._checkRestartSchedule(interaction);
+			} else {
+				this.logger.error(
+					"Command doesn't have a valid 'execute' function:",
+					command.name || commandKey,
+				);
+				await interaction.reply({
+					content: await this.t(
+						interaction,
+						'common.error.command.execution.invalid',
+					),
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+		} catch (error: any) {
+			this.logger.error('Error handling chat input command:', error);
 			this.container.telemetry?.report(
-				'info',
-				`Command Executed: /${commandKey}`,
+				'error',
+				`Chat Input Command Failed: [${interaction.commandName}]`,
 				{
-					user: `${interaction.user.tag} (${interaction.user.id})`,
-					guild: interaction.guild
-						? `${interaction.guild.name} (${interaction.guild.id})`
-						: 'DM',
-					channel: interaction.channelId,
+					message: error.message,
+					stack: error.stack,
 				},
 			);
-
-			if (command.execute.length === 2) {
-				await command.execute(interaction, this.container);
-			} else {
-				await command.execute(interaction);
-			}
-
-			await this._checkRestartSchedule(interaction);
-		} else {
-			this.logger.error(
-				"Command doesn't have a valid 'execute' function:",
-				command.name || commandKey,
-			);
-			await interaction.reply({
-				content: await this.t(
-					interaction,
-					'common.error.command.execution.invalid',
-				),
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
+			throw error;
 		}
 	}
 
 	private async _handleAutocomplete(
 		interaction: AutocompleteInteraction,
 	): Promise<void> {
-		let commandKey = interaction.commandName;
-		const group = interaction.options.getSubcommandGroup(false);
-		const subcommand = interaction.options.getSubcommand(false);
+		try {
+			let commandKey = interaction.commandName;
+			const group = interaction.options.getSubcommandGroup(false);
+			const subcommand = interaction.options.getSubcommand(false);
 
-		if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
-		else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
+			if (group) commandKey = `${commandKey} ${group} ${subcommand}`;
+			else if (subcommand) commandKey = `${commandKey} ${subcommand}`;
 
-		let handler = this.autocompleteHandlers.get(commandKey);
+			let handler = this.autocompleteHandlers.get(commandKey);
 
-		if (!handler && (subcommand || group)) {
-			handler = this.autocompleteHandlers.get(interaction.commandName);
-		}
-
-		if (handler) {
-			try {
-				await handler(interaction, this.container);
-			} catch (_e) {}
-		} else {
-			try {
-				await interaction.respond([]);
-			} catch (e) {
-				this.logger.error(e);
+			if (!handler && (subcommand || group)) {
+				handler = this.autocompleteHandlers.get(interaction.commandName);
 			}
+
+			if (handler) {
+				try {
+					await handler(interaction, this.container);
+				} catch (_e) {}
+			} else {
+				try {
+					await interaction.respond([]);
+				} catch (e) {
+					this.logger.error(e);
+				}
+			}
+		} catch (error: any) {
+			this.logger.error('Error handling autocomplete:', error);
+			this.container.telemetry?.report(
+				'error',
+				`Autocomplete Failed: [${interaction.commandName}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
 		}
 	}
 
 	private async _handleButton(interaction: ButtonInteraction): Promise<void> {
-		const customIdPrefix = interaction.customId.includes('|')
-			? interaction.customId.split('|')[0]
-			: interaction.customId.split(':')[0];
+		try {
+			const customIdPrefix = interaction.customId.includes('|')
+				? interaction.customId.split('|')[0]
+				: interaction.customId.split(':')[0];
 
-		const handler = this.buttonHandlers.get(customIdPrefix);
+			const handler = this.buttonHandlers.get(customIdPrefix);
 
-		if (handler) {
-			const handlerFunc = handler as unknown as Function;
+			if (handler) {
+				const handlerFunc = handler as unknown as Function;
 
-			if (
-				typeof handler === 'object' &&
-				typeof (handler as any).execute === 'function'
-			) {
-				await (handler as any).execute(interaction, this.container);
-			} else if (typeof handler === 'function') {
-				if (handlerFunc.length === 2) {
-					await handler(interaction, this.container);
+				if (
+					typeof handler === 'object' &&
+					typeof (handler as any).execute === 'function'
+				) {
+					await (handler as any).execute(interaction, this.container);
+				} else if (typeof handler === 'function') {
+					if (handlerFunc.length === 2) {
+						await handler(interaction, this.container);
+					} else {
+						await (handler as any)(interaction);
+					}
 				} else {
-					await (handler as any)(interaction);
+					this.logger.error(
+						`Handler for button ${customIdPrefix} has an invalid format`,
+					);
 				}
-			} else {
-				this.logger.error(
-					`Handler for button ${customIdPrefix} has an invalid format`,
-				);
 			}
+		} catch (error: any) {
+			this.logger.error('Error handling button interaction:', error);
+			this.container.telemetry?.report(
+				'error',
+				`Button Interaction Failed: [${interaction.customId}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+			throw error;
 		}
 	}
 
 	private async _handleModalSubmit(
 		interaction: ModalSubmitInteraction,
 	): Promise<void> {
-		const customIdPrefix = interaction.customId.includes('|')
-			? interaction.customId.split('|')[0]
-			: interaction.customId.split(':')[0];
+		try {
+			const customIdPrefix = interaction.customId.includes('|')
+				? interaction.customId.split('|')[0]
+				: interaction.customId.split(':')[0];
 
-		this.logger.info(
-			`Modal submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
-		);
+			this.logger.info(
+				`Modal submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
+			);
 
-		const handler = this.modalHandlers.get(customIdPrefix);
-		this.logger.info(`Modal handler found: ${!!handler}`);
+			const handler = this.modalHandlers.get(customIdPrefix);
+			this.logger.info(`Modal handler found: ${!!handler}`);
 
-		if (handler) {
-			const handlerFunc = handler as unknown as Function;
+			if (handler) {
+				const handlerFunc = handler as unknown as Function;
 
-			if (
-				typeof handler === 'object' &&
-				typeof (handler as any).execute === 'function'
-			) {
-				await (handler as any).execute(interaction, this.container);
-			} else if (typeof handler === 'function') {
-				if (handlerFunc.length === 2) {
-					await handler(interaction, this.container);
+				if (
+					typeof handler === 'object' &&
+					typeof (handler as any).execute === 'function'
+				) {
+					await (handler as any).execute(interaction, this.container);
+				} else if (typeof handler === 'function') {
+					if (handlerFunc.length === 2) {
+						await handler(interaction, this.container);
+					} else {
+						await (handler as any)(interaction);
+					}
 				} else {
-					await (handler as any)(interaction);
+					this.logger.error(
+						`Handler for modal ${customIdPrefix} has an invalid format`,
+					);
 				}
-			} else {
-				this.logger.error(
-					`Handler for modal ${customIdPrefix} has an invalid format`,
-				);
 			}
+		} catch (error: any) {
+			this.logger.error('Error handling modal submit:', error);
+			this.container.telemetry?.report(
+				'error',
+				`Modal Submit Failed: [${interaction.customId}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+			throw error;
 		}
 	}
 
 	private async _handleSelectMenu(
 		interaction: AnySelectMenuInteraction,
 	): Promise<void> {
-		const customIdPrefix = interaction.customId.includes('|')
-			? interaction.customId.split('|')[0]
-			: interaction.customId.split(':')[0];
+		try {
+			const customIdPrefix = interaction.customId.includes('|')
+				? interaction.customId.split('|')[0]
+				: interaction.customId.split(':')[0];
 
-		this.logger.info(
-			`Select menu submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
-		);
+			this.logger.info(
+				`Select menu submit - customId: ${interaction.customId}, prefix: ${customIdPrefix}`,
+			);
 
-		const handler = this.selectMenuHandlers.get(customIdPrefix);
-		this.logger.info(`Select menu handler found: ${!!handler}`);
+			const handler = this.selectMenuHandlers.get(customIdPrefix);
+			this.logger.info(`Select menu handler found: ${!!handler}`);
 
-		if (handler) {
-			const handlerFunc = handler as unknown as Function;
+			if (handler) {
+				const handlerFunc = handler as unknown as Function;
 
-			if (
-				typeof handler === 'object' &&
-				typeof (handler as any).execute === 'function'
-			) {
-				await (handler as any).execute(interaction, this.container);
-			} else if (typeof handler === 'function') {
-				if (handlerFunc.length === 2) {
-					await handler(interaction, this.container);
+				if (
+					typeof handler === 'object' &&
+					typeof (handler as any).execute === 'function'
+				) {
+					await (handler as any).execute(interaction, this.container);
+				} else if (typeof handler === 'function') {
+					if (handlerFunc.length === 2) {
+						await handler(interaction, this.container);
+					} else {
+						await (handler as any)(interaction);
+					}
 				} else {
-					await (handler as any)(interaction);
+					this.logger.error(
+						`Handler for select menu ${customIdPrefix} has an invalid format`,
+					);
 				}
-			} else {
-				this.logger.error(
-					`Handler for select menu ${customIdPrefix} has an invalid format`,
-				);
 			}
+		} catch (error: any) {
+			this.logger.error('Error handling select menu:', error);
+			this.container.telemetry?.report(
+				'error',
+				`Select Menu Failed: [${interaction.customId}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+			throw error;
 		}
 	}
 
@@ -369,24 +431,40 @@ export class InteractionManager implements IInteractionManager {
 			| UserContextMenuCommandInteraction
 			| MessageContextMenuCommandInteraction,
 	): Promise<void> {
-		const command = this.client.commands.get(interaction.commandName);
-		if (!command) return;
+		try {
+			const command = this.client.commands.get(interaction.commandName);
+			if (!command) return;
 
-		if (this.middlewareManager) {
-			const canRun = await this.middlewareManager.handle(interaction, command);
-			if (!canRun) return;
+			if (this.middlewareManager) {
+				const canRun = await this.middlewareManager.handle(
+					interaction,
+					command,
+				);
+				if (!canRun) return;
+			}
+
+			if (!(interaction as any).logger) {
+				(interaction as any).logger = this.logger;
+			}
+			if (this.container && !this.container.logger) {
+				this.container.logger = this.logger;
+			}
+
+			await this._checkRestartSchedule(interaction);
+
+			await command.execute(interaction, this.container);
+		} catch (error: any) {
+			this.logger.error('Error handling context menu command:', error);
+			this.container.telemetry?.report(
+				'error',
+				`Context Menu Command Failed: [${interaction.commandName}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+			throw error;
 		}
-
-		if (!(interaction as any).logger) {
-			(interaction as any).logger = this.logger;
-		}
-		if (this.container && !this.container.logger) {
-			this.container.logger = this.logger;
-		}
-
-		await this._checkRestartSchedule(interaction);
-
-		await command.execute(interaction, this.container);
 	}
 
 	private async _checkRestartSchedule(interaction: Interaction): Promise<void> {
