@@ -4,7 +4,7 @@
  * @file src/cli/commands/MigrateCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.5-beta
+ * @version 0.12.6-beta
  *
  * @description
  * Manages database schema updates using Umzug. Supports standard migration,

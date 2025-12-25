@@ -4,7 +4,7 @@
  * @file src/managers/InteractionManager.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.5-beta
+ * @version 0.12.6-beta
  *
  * @description
  * Handles all Discord interaction events including slash commands, buttons, modals,

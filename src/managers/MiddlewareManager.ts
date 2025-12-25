@@ -4,7 +4,7 @@
  * @file src/managers/MiddlewareManager.js
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.5-beta
+ * @version 0.12.6-beta
  *
  * @description
  * Handles the loading and execution of middleware functions for the application.
