@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.6-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.5-beta...v0.12.6-beta) (2025-12-25)
+
+
+### ✨ Added
+
+* add AboutCommand, enhance type safety, and clarify error handling across core modules. ([a1e17d2](https://github.com/kenndeclouv/kythia-core/commit/a1e17d29c3d5434dc5e8927a54f61b0dae87785d))
+
 ### [0.12.5-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.4-beta...v0.12.5-beta) (2025-12-20)
 
 
