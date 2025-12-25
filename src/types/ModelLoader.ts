@@ -1,9 +1,10 @@
 import type { Sequelize } from 'sequelize';
 import type { KythiaContainer } from './KythiaContainer';
+import type { KythiaLogger } from './KythiaLogger';
 
 export interface KythiaInstanceForLoader {
 	container: KythiaContainer;
-	logger: any;
+	logger: KythiaLogger;
 }
 
 export type BootModels = (

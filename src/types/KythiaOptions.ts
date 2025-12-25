@@ -1,13 +1,19 @@
 import type { Sequelize } from 'sequelize';
 import type { KythiaConfig } from './KythiaConfig';
+import type { KythiaLogger } from './KythiaLogger';
+import type Redis from 'ioredis';
+import type {
+	KythiaModelsCollection,
+	KythiaHelpersCollection,
+} from './KythiaContainer';
 
 export interface KythiaOptions {
 	config: KythiaConfig;
-	logger?: any;
-	redis: any;
-	sequelize: Sequelize;
-	models?: Record<string, any>;
-	helpers?: Record<string, any>;
-	utils?: Record<string, any>;
+	logger?: KythiaLogger;
+	redis?: Redis;
+	sequelize?: Sequelize;
+	models?: KythiaModelsCollection;
+	helpers?: KythiaHelpersCollection;
+	utils?: Record<string, unknown>;
 	appRoot?: string;
 }

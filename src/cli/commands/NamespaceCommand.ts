@@ -3,7 +3,7 @@
  *
  * @file src/cli/commands/NamespaceCommand.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -87,7 +87,7 @@ export default class NamespaceCommand extends Command {
  * @namespace: ${relativePath}
  * @type: ${fileType}
  * @copyright © ${currentYear} kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version ${pkg.version}
  */`;
 

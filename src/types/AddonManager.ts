@@ -11,9 +11,16 @@ import type {
 	APIEmbed,
 	Client,
 	Collection,
+	RESTPostAPIApplicationCommandsJSONBody,
+	ApplicationCommandType,
+	ChatInputCommandInteraction,
+	UserContextMenuCommandInteraction,
+	MessageContextMenuCommandInteraction,
 } from 'discord.js';
 import type { KythiaContainer } from './KythiaContainer';
 import type { KythiaAugmentedEventHandler } from './EventManager';
+import type { KythiaLogger } from './KythiaLogger';
+import type Kythia from '@src/Kythia';
 
 /* -------------------------------------------------------------------------- */
 /* TYPE ALIASES                               								  */
@@ -40,6 +47,15 @@ export type KythiaAutocompleteHandler = (
 ) => Promise<void> | void;
 
 export type KythiaEventHandler = KythiaAugmentedEventHandler;
+export type KythiaCommandInteraction =
+	| ChatInputCommandInteraction
+	| UserContextMenuCommandInteraction
+	| MessageContextMenuCommandInteraction;
+
+export type KythiaCommandHandler = (
+	interaction: KythiaCommandInteraction,
+	container?: KythiaContainer,
+) => Promise<void> | void;
 
 /* -------------------------------------------------------------------------- */
 /* DATA STRUCTURES                                                            */
@@ -59,15 +75,17 @@ export interface CommandRegistrationSummary {
 }
 
 export interface KythiaCommandModule {
-	data?: any;
-	slashCommand?: any;
-	contextMenuCommand?: any;
-	prefixCommand?: any;
+	data?: RESTPostAPIApplicationCommandsJSONBody;
+	slashCommand?: RESTPostAPIApplicationCommandsJSONBody;
+	contextMenuCommand?: RESTPostAPIApplicationCommandsJSONBody;
+	prefixCommand?: unknown;
 	subcommand?: boolean;
 	autocomplete?: KythiaAutocompleteHandler;
+	execute?: KythiaCommandHandler;
 	featureFlag?: string;
 	disableAutoPrefix?: boolean;
-	[key: string]: any;
+	mainGuildOnly?: boolean;
+	[key: string]: unknown;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -77,7 +95,7 @@ export interface KythiaCommandModule {
 export interface IAddonManager {
 	client: Client;
 	container: KythiaContainer;
-	logger: any;
+	logger: KythiaLogger;
 
 	buttonHandlers: Map<string, KythiaButtonHandler>;
 	modalHandlers: Map<string, KythiaModalHandler>;
@@ -108,12 +126,14 @@ export interface IAddonManager {
 		module: KythiaCommandModule,
 		filePath: string,
 		commandNamesSet: Set<string>,
-		commandDataForDeployment: object[],
-		permissionDefaults?: any,
-		options?: any,
+		commandDataForDeployment: RESTPostAPIApplicationCommandsJSONBody[],
+		permissionDefaults?: unknown,
+		options?: unknown,
 	): CommandRegistrationSummary | null;
 
-	loadAddons(kythiaInstance: any): Promise<object[]>;
+	loadAddons(
+		kythiaInstance: Kythia,
+	): Promise<RESTPostAPIApplicationCommandsJSONBody[]>;
 
 	getHandlers(): {
 		buttonHandlers: Map<string, KythiaButtonHandler>;
@@ -124,4 +144,12 @@ export interface IAddonManager {
 		categoryToFeatureMap: Map<string, string>;
 		eventHandlers: Map<string, KythiaEventHandler[]>;
 	};
+}
+
+export interface RawCommandData {
+	name?: string;
+	description?: string;
+	permissions?: string | number | bigint | null;
+	guildOnly?: boolean;
+	type?: ApplicationCommandType;
 }

@@ -1,5 +1,6 @@
 import type { Sequelize, Dialect } from 'sequelize';
 import type { KythiaConfig } from './KythiaConfig';
+import type { KythiaLogger } from './KythiaLogger';
 
 export interface KythiaSequelizeConfig extends KythiaConfig {
 	driver?: Dialect;
@@ -13,6 +14,6 @@ export interface KythiaSequelizeConfig extends KythiaConfig {
 
 export type CreateSequelizeInstance = (
 	config: KythiaConfig,
-	logger?: any,
+	logger?: KythiaLogger,
 	driver?: Dialect,
 ) => Sequelize;

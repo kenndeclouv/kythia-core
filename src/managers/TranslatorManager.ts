@@ -7,7 +7,9 @@ import { Collection, type BaseInteraction } from 'discord.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import type {
+	KythiaConfig,
 	KythiaContainer,
+	KythiaLogger,
 	LocaleData,
 	TranslationVariables,
 } from '../types';
@@ -15,8 +17,8 @@ import type {
 type LanguageResolver = (guildId: string) => Promise<string | null>;
 
 export default class TranslatorManager {
-	private logger: any;
-	private config: any;
+	private logger: KythiaLogger;
+	private config: KythiaConfig;
 
 	public guildLanguageCache: Collection<string, string>;
 	public locales: Collection<string, LocaleData>;
@@ -91,15 +93,6 @@ export default class TranslatorManager {
 						`Error loading language file ${file} from ${dirPath}:`,
 						err,
 					);
-					// We can't use container.telemetry here because TranslatorManager is initialized before TelemetryManager in some cases,
-					// or doesn't have direct access to container in the same way.
-					// However, based on the constructor, it DOES have access to container.
-					// But TranslatorManager properties are defined as private/public without container being a public property on the class itself,
-					// only passed in constructor.
-					// Wait, the constructor assigns `this.logger = container.logger`.
-					// It does NOT assign `this.container = container`.
-					// So I cannot access `this.container.telemetry`.
-					// I should check if I can add `container` to the class properties.
 				}
 			}
 		} catch (error: any) {

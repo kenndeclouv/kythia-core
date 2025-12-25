@@ -3,10 +3,25 @@
  *
  * @file src/Kythia.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
+ * WHAT IS KYTHIA?
+ * Kythia is a premium, production-ready Discord bot framework built with TypeScript.
+ * It provides a robust, modular architecture for building feature-rich Discord bots
+ * with enterprise-grade reliability, scalability, and developer experience.
+ *
+ * KEY FEATURES:
+ * 🎯 Modular Addon System - Dynamic loading of feature modules
+ * 🔄 Advanced DI Container - Centralized dependency injection
+ * 🗄️ Database Agnostic - Support for SQLite, MySQL, PostgreSQL
+ * 🌐 i18n Support - Multi-language translation system
+ * 📊 Telemetry & Monitoring - Built-in observability and license verification
+ * 🛡️ Middleware Pipeline - Request processing and validation
+ * 🎭 Event Management - Sophisticated event routing and handling
+ * 🔌 Interaction Handlers - Slash commands, buttons, modals, select menus
+ *
  * The heart of the application lifecycle. This class acts as the central
  * Dependency Injection (DI) container and orchestrator for all subsystems.
  * It manages the startup sequence, module loading, and graceful shutdown procedures.
@@ -31,8 +46,22 @@ import type {
 	KythiaLogger,
 	IEventManager,
 	ITranslatorManager,
+	KythiaConfigDb,
 } from './types';
-import { REST, Routes, Collection, type Client } from 'discord.js';
+
+import type {
+	KythiaModelsCollection,
+	KythiaHelpersCollection,
+} from './types/KythiaContainer';
+
+import {
+	REST,
+	Routes,
+	Collection,
+	type Client,
+	type RESTPostAPIApplicationCommandsJSONBody,
+	type Interaction,
+} from 'discord.js';
 import * as Sentry from '@sentry/node';
 import path from 'node:path';
 import figlet from 'figlet';
@@ -66,9 +95,9 @@ class Kythia {
 	public appRoot: string;
 	public client: IKythiaClient;
 	public rest: REST;
-	public models: Record<string, any>;
-	public helpers: Record<string, any>;
-	public utils: Record<string, any>;
+	public models: KythiaModelsCollection;
+	public helpers: KythiaHelpersCollection;
+	public utils: Record<string, unknown>;
 	public redis?: Redis;
 	public sequelize?: Sequelize;
 	public logger: KythiaLogger;
@@ -102,9 +131,9 @@ class Kythia {
 		logger?: KythiaLogger;
 		redis?: Redis;
 		sequelize?: Sequelize;
-		models?: Record<string, any>;
-		helpers?: Record<string, any>;
-		utils?: Record<string, any>;
+		models?: KythiaModelsCollection;
+		helpers?: Partial<KythiaHelpersCollection>;
+		utils?: Record<string, unknown>;
 		appRoot?: string;
 	}) {
 		const missingDeps: string[] = [];
@@ -147,6 +176,13 @@ class Kythia {
 
 		this.logger = logger || kythiaLogger;
 
+		this.telemetryManager = new TelemetryManager({
+			licenseKey: this.kythiaConfig.licenseKey,
+			logger: this.logger,
+			version: version,
+			config: this.kythiaConfig,
+		});
+
 		this.container = {
 			client: this.client,
 			sequelize: this.sequelize,
@@ -157,10 +193,11 @@ class Kythia {
 
 			helpers: this.helpers,
 			appRoot: this.appRoot,
+			telemetry: this.telemetryManager,
 
-			t: async () => '',
+			t: async (_interaction: Interaction, key: string) => key,
 			models: this.models,
-		} as unknown as IKythiaContainer;
+		} as IKythiaContainer;
 
 		this.translator = new TranslatorManager({ container: this.container });
 		this.container.translator = this.translator;
@@ -185,7 +222,7 @@ class Kythia {
 		];
 		const missingBotConfigs: string[] = [];
 		for (const pathArr of requiredBotConfig) {
-			let value: any = this.kythiaConfig;
+			let value: unknown = this.kythiaConfig;
 			for (const key of pathArr) {
 				value = value?.[key as keyof typeof value];
 			}
@@ -194,7 +231,9 @@ class Kythia {
 			}
 		}
 
-		if (!this.kythiaConfig.db) this.kythiaConfig.db = {} as any;
+		if (!this.kythiaConfig.db) {
+			this.kythiaConfig.db = {} as KythiaConfigDb;
+		}
 
 		let driver = this.kythiaConfig.db.driver;
 		if (!driver || (driver as string) === '') {
@@ -228,7 +267,7 @@ class Kythia {
 
 		const missingDbConfigs: string[] = [];
 		for (const pathArr of requiredDbConfig) {
-			let value: any = this.kythiaConfig;
+			let value: unknown = this.kythiaConfig;
 			for (const key of pathArr) {
 				value = value?.[key as keyof typeof value];
 			}
@@ -296,7 +335,9 @@ class Kythia {
 	 * Deploys all registered slash commands to Discord using the REST API.
 	 * @param {Array} commands - Array of command data to deploy
 	 */
-	private async _deployCommands(commands: any[]) {
+	private async _deployCommands(
+		commands: RESTPostAPIApplicationCommandsJSONBody[],
+	) {
 		if (!commands || commands.length === 0) {
 			this.logger.info('No commands to deploy.');
 			return;
@@ -305,6 +346,7 @@ class Kythia {
 			const { slash, user, message } = this._getCommandCounts(commands);
 			const clientId = this.kythiaConfig.bot.clientId;
 			const devGuildId = this.kythiaConfig.bot.devGuildId;
+			const mainGuildId = this.kythiaConfig.bot.mainGuildId;
 
 			if (this.kythiaConfig.env === 'development') {
 				if (!devGuildId) {
@@ -320,32 +362,56 @@ class Kythia {
 				);
 				this.logger.info('✅ Guild commands deployed instantly!');
 			} else {
-				this.logger.info(`🟢 Deploying globally...`);
+				const globalCommands: RESTPostAPIApplicationCommandsJSONBody[] = [];
+				const mainGuildCommands: RESTPostAPIApplicationCommandsJSONBody[] = [];
+
+				for (const cmdJSON of commands) {
+					const cmdName = cmdJSON.name;
+					const originalCmd = this.client.commands.get(cmdName);
+
+					if (originalCmd?.mainGuildOnly) {
+						mainGuildCommands.push(cmdJSON);
+					} else {
+						globalCommands.push(cmdJSON);
+					}
+				}
+
+				this.logger.info(
+					`🟢 Deploying ${globalCommands.length} global commands...`,
+				);
 				await this.rest.put(Routes.applicationCommands(clientId), {
-					body: commands,
+					body: globalCommands,
 				});
 				this.logger.info('✅ Global commands deployed successfully!');
-				if (devGuildId) {
+
+				if (mainGuildId && mainGuildCommands.length > 0) {
 					this.logger.info(
-						`🧹 Clearing old commands from dev guild: ${devGuildId}...`,
+						`🔒 Deploying ${mainGuildCommands.length} MAIN GUILD commands to: ${mainGuildId}...`,
+					);
+					await this.rest.put(
+						Routes.applicationGuildCommands(clientId, mainGuildId),
+						{ body: mainGuildCommands },
+					);
+					this.logger.info('✅ Main Guild commands deployed successfully.');
+				}
+
+				if (devGuildId && devGuildId !== mainGuildId) {
+					this.logger.info(
+						`🧹 Clearing lingering commands from dev guild: ${devGuildId}...`,
 					);
 					try {
 						await this.rest.put(
 							Routes.applicationGuildCommands(clientId, devGuildId),
 							{ body: [] },
 						);
-						this.logger.info('✅ Dev guild commands cleared successfully.');
-					} catch (err: any) {
-						this.logger.warn(
-							`⚠️ Could not clear dev guild commands (maybe it was already clean): ${err.message}`,
-						);
+						this.logger.info('✅ Dev guild commands cleaned up.');
+					} catch (e) {
+						this.logger.warn(`⚠️ Dev guild cleanup info: ${e}`);
 					}
 				}
 			}
 
-			this.logger.info(`⭕ All Slash Commands: ${commands.length}`, {
-				label: 'Slash Commands',
-			});
+			this.logger.info(`⭕ All Slash Commands: ${commands.length}`);
 			this.logger.info(`⭕ Top Level Slash Commands: ${slash}`);
 			this.logger.info(`⭕ User Context Menu: ${user}`);
 			this.logger.info(`⭕ Message Context Menu: ${message}`);
@@ -361,7 +427,9 @@ class Kythia {
 	 * @returns {object} - Object containing counts { slash, user, message }
 	 * @private
 	 */
-	private _getCommandCounts(commandJsonArray: any[]) {
+	private _getCommandCounts(
+		commandJsonArray: RESTPostAPIApplicationCommandsJSONBody[],
+	) {
 		const counts = { slash: 0, user: 0, message: 0 };
 
 		if (!Array.isArray(commandJsonArray)) {
@@ -407,24 +475,53 @@ class Kythia {
 
 	/**
 	 * 🌸 Start the Kythia Bot
-	 * Main orchestration method that:
-	 * 1. Initializes Redis cache
-	 * 2. Creates and starts all managers
-	 * 3. Loads addons via AddonManager
-	 * 4. Initializes database
-	 * 5. Sets up interaction and event handlers
-	 * 6. Deploys commands
-	 * 7. Logs in to Discord
+	 *
+	 * ABOUT KYTHIA:
+	 * Kythia is a professional Discord bot framework that powers feature-rich,
+	 * scalable Discord applications. Built with modern TypeScript and discord.js,
+	 * it provides everything you need to create production-ready bots:
+	 *
+	 * 🎯 What Kythia Offers:
+	 * - Modular addon architecture for organized feature development
+	 * - Built-in database support (SQLite, MySQL, PostgreSQL)
+	 * - Comprehensive interaction handling (slash commands, buttons, modals, etc.)
+	 * - Multi-language support with integrated translation system
+	 * - Advanced middleware pipeline for request processing
+	 * - Enterprise-grade error handling and monitoring
+	 * - Redis caching for optimal performance
+	 * - License verification and telemetry system
+	 * - Graceful shutdown and process management
+	 *
+	 * 🚀 Startup Sequence:
+	 * This method orchestrates the complete bot initialization:
+	 * 1. Displays CLI banner with project information
+	 * 2. Verifies Terms of Service agreement
+	 * 3. Initializes Sentry error tracking (if configured)
+	 * 4. Validates license key and starts telemetry
+	 * 5. Loads translation system and language files
+	 * 6. Initializes addon manager and loads all addons
+	 * 7. Connects to database and runs migrations
+	 * 8. Sets up event and interaction handlers
+	 * 9. Loads middleware pipeline
+	 * 10. Deploys slash commands to Discord
+	 * 11. Initializes graceful shutdown manager
+	 * 12. Logs in to Discord Gateway
 	 */
 	public async start() {
-		const figletText = (text: string, opts: any) =>
+		const figletText = (text: string, opts: figlet.FigletOptions) =>
 			new Promise<string>((resolve, reject) => {
-				figlet.text(text, opts, (err: any, data: any) => {
-					if (err) reject(err);
-					else resolve(data);
-				});
+				figlet.text(
+					text,
+					opts,
+					(err: Error | null, data: string | undefined) => {
+						if (err) {
+							reject(err);
+						} else {
+							resolve(data || '');
+						}
+					},
+				);
 			});
-
 		try {
 			const data = await figletText('KYTHIA', {
 				font: 'ANSI Shadow',
@@ -433,12 +530,13 @@ class Kythia {
 			});
 
 			const infoLines = [
-				clc.cyan('Created by kenndeclouv'),
+				clc.cyan('Architected by kenndeclouv'),
 				clc.cyan('Discord Support: ') + clc.underline('https://dsc.gg/kythia'),
-				clc.cyan('Official Documentation: ') +
-					clc.underline('https://kythia.me'),
+				clc.cyan('Official Github: ') +
+					clc.underline('https://github.com/kythia'),
+				clc.cyan('Official Website: ') + clc.underline('https://kythia.me'),
 				'',
-				clc.cyanBright(`Kythia version: ${version}`),
+				clc.cyanBright(`Kythia Core version: ${version}`),
 				'',
 				clc.yellowBright('Respect my work by not removing the credit'),
 			];
@@ -551,17 +649,7 @@ class Kythia {
 
 		this._checkRequiredConfig();
 
-		const telemetry = new TelemetryManager({
-			licenseKey: this.kythiaConfig.licenseKey,
-			logger: this.logger,
-			version: version,
-			config: this.kythiaConfig,
-		});
-
-		this.telemetryManager = telemetry;
-		this.container.telemetry = telemetry;
-
-		const isLicenseValid = await telemetry.verify();
+		const isLicenseValid = await this.telemetryManager.verify();
 
 		if (!isLicenseValid) {
 			this.logger.error(
@@ -576,36 +664,27 @@ class Kythia {
 			this.logger.error(
 				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
 			);
-
-			process.exit(1);
 		}
 
 		if (isLicenseValid) {
-			telemetry.startHeartbeat();
-			telemetry.startAutoFlush();
+			this.telemetryManager.startHeartbeat();
+			this.telemetryManager.startAutoFlush();
 
-			telemetry.report('info', `Bot Process Started (v${version})`, {
-				node: process.version,
-				platform: process.platform,
-				cwd: process.cwd(),
-			});
+			this.telemetryManager.report(
+				'info',
+				`Bot Process Started (v${version})`,
+				{
+					node: process.version,
+					platform: process.platform,
+					cwd: process.cwd(),
+				},
+			);
 		}
 
 		try {
 			const shouldDeploy = !process.argv.includes('--dev');
 
-			// this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Load Fonts ]▬▬▬▬▬▬▬▬▬▬▬');
-
-			// if (
-			// 	this.helpers?.fonts &&
-			// 	typeof this.helpers.fonts.loadFonts === 'function'
-			// ) {
-			// 	this.helpers.fonts.loadFonts({ logger: this.logger });
-			// }
-
 			this.logger.info('▬▬▬▬▬▬▬▬▬▬▬[ Translator System ]▬▬▬▬▬▬▬▬▬▬▬');
-
-			// this.translator = new TranslatorManager({ container: this.container });
 
 			const coreLangPath = path.join(__dirname, 'lang');
 			this.translator.loadLocalesFromDir(coreLangPath);
@@ -621,7 +700,10 @@ class Kythia {
 				client: this.client,
 				container: this.container,
 			});
-			const allCommands = await this.addonManager.loadAddons(this);
+
+			const allCommands = (await this.addonManager.loadAddons(
+				this,
+			)) as RESTPostAPIApplicationCommandsJSONBody[];
 
 			if (this.sequelize) {
 				this.logger.info('▬▬▬▬▬▬▬▬▬▬▬▬▬▬[ Connect Database ]▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
@@ -710,16 +792,12 @@ class Kythia {
 			});
 
 			await this.client.login(this.kythiaConfig.bot.token);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			this.logger.error('❌ Kythia initialization failed:', error);
 			try {
-				await this.telemetryManager.report(
-					'error',
-					`Startup Fatal Crash: ${error.message}`,
-					{
-						stack: error.stack,
-					},
-				);
+				await this.telemetryManager.report('error', `Startup Fatal Crash`, {
+					stack: error,
+				});
 			} catch (_e) {}
 			if (this.kythiaConfig.sentry?.dsn) {
 				Sentry.captureException(error);

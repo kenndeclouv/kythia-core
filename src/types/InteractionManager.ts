@@ -1,5 +1,9 @@
 import type { KythiaClient } from './KythiaClient';
-import type { KythiaContainer } from './KythiaContainer';
+import type {
+	KythiaContainer,
+	KythiaHelpersCollection,
+	KythiaModelsCollection,
+} from './KythiaContainer';
 import type {
 	KythiaButtonHandler,
 	KythiaModalHandler,
@@ -9,6 +13,8 @@ import type {
 
 import type { IMiddlewareManager } from './MiddlewareManager';
 import type { KythiaConfig } from './KythiaConfig';
+import type { KythiaLogger } from './KythiaLogger';
+import type { TranslateFunction } from './TranslatorManager';
 
 export interface InteractionManagerHandlers {
 	buttonHandlers: Map<string, KythiaButtonHandler>;
@@ -31,11 +37,11 @@ export interface IInteractionManager {
 	categoryToFeatureMap: Map<string, string>;
 
 	kythiaConfig: KythiaConfig;
-	models: any;
-	helpers: any;
-	logger: any;
-	t: any;
-	middlewareManager: IMiddlewareManager;
+	models: KythiaModelsCollection;
+	helpers: KythiaHelpersCollection;
+	logger: KythiaLogger;
+	t: TranslateFunction;
+	middlewareManager?: IMiddlewareManager;
 
 	isOwner: (userId: string) => boolean;
 

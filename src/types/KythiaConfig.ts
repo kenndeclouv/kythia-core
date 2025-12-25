@@ -41,7 +41,7 @@ export interface KythiaConfigDb {
 	pass?: string;
 	storagePath?: string;
 	socketPath?: string;
-	dialectOptions?: object;
+	dialectOptions?: Record<string, unknown>;
 	timezone: string;
 	redis?: KythiaRedisConfig;
 	redisCacheVersion: string;

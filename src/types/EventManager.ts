@@ -10,5 +10,5 @@ export interface IEventManager {
 
 export type KythiaAugmentedEventHandler = (
 	manager: IEventManager,
-	...args: any[]
-) => Promise<boolean | undefined | undefined> | boolean | undefined | undefined;
+	...args: unknown[]
+) => Promise<boolean | undefined> | boolean | undefined;

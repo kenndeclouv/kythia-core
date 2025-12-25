@@ -3,7 +3,7 @@
  *
  * @file src/client/kythiaClient.js
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -22,9 +22,11 @@ import type { KythiaClient as IKythiaClient } from './types';
 
 export default function kythiaClient(): IKythiaClient {
 	const client = new Client({
+		waitGuildTimeout: 60000,
+		closeTimeout: 60000,
 		rest: {
 			timeout: 60000,
-			retries: 10,
+			retries: 20,
 		},
 		ws: {
 			large_threshold: 250,

@@ -3,7 +3,7 @@
  *
  * @file src/managers/MiddlewareManager.js
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -14,11 +14,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Interaction } from 'discord.js';
-import type { KythiaContainer, KythiaMiddleware } from '../types';
+import type { KythiaContainer, KythiaLogger, KythiaMiddleware } from '../types';
+import type { IMiddlewareManager } from '../types/MiddlewareManager';
 
-export default class MiddlewareManager {
+export default class MiddlewareManager implements IMiddlewareManager {
 	public container: KythiaContainer;
-	public logger: any;
+	public logger: KythiaLogger;
 	public middlewares: KythiaMiddleware[];
 
 	constructor({ container }: { container: KythiaContainer }) {

@@ -3,7 +3,7 @@
  *
  * @file src/cli/commands/MakeModelCommand.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -57,7 +57,7 @@ export default class MakeModelCommand extends Command {
  * @namespace: addons/${addon}/database/models/${fileName}
  * @type: Database Model
  * @copyright © ${new Date().getFullYear()} kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  */
 

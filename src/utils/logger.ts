@@ -3,7 +3,7 @@
  *
  * @file src/utils/logger.js
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -16,6 +16,8 @@
  * - Optional timestamp formatting per config
  * - Daily rotating log files for combined and error logs
  * - Flush-and-exit helper to ensure all logs are written
+ *
+ * https://www.npmjs.com/package/colors-cli
  */
 
 import winston from 'winston';
@@ -23,7 +25,7 @@ import 'winston-daily-rotate-file';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const clc = require('cli-color');
+import clc from 'cli-color';
 
 import type { KythiaLogger } from '../types';
 
@@ -53,7 +55,7 @@ const isProduction = kythiaConfig.env === 'production';
 const levelColors: Record<string, any> = {
 	error: clc.bgRed.whiteBright.bold,
 	warn: clc.bgYellow.black.bold,
-	info: clc.bgBlue.whiteBright.bold,
+	info: clc.bgCyan.black.bold,
 	debug: clc.bgMagenta.white.bold,
 	silly: clc.bgBlue.white,
 	verbose: clc.bgGreen.black,
@@ -67,7 +69,7 @@ const levelIcons: Record<string, string> = {
 	debug: '⚙',
 	silly: '💬',
 	verbose: '🔎',
-	default: '✿',
+	default: '・',
 };
 
 const messageColors: Record<string, any> = {
@@ -110,9 +112,11 @@ consoleFormatters.push(
 		const levelText = level.toUpperCase().padEnd(7);
 		const levelLabel = levelColors[levelKey](` ${icon} ${levelText} `);
 
-		const timeLabel = timestamp ? clc.blackBright(`[${timestamp}]`) : '';
+		const timeLabel = timestamp
+			? clc.bgWhiteBright.black(` ${timestamp} `)
+			: '';
 		const categoryLabel = label
-			? clc.bgWhite.black.bold(` ${String(label).toUpperCase()} `)
+			? clc.bgWhiteBright.black.bold(` ${String(label).toUpperCase()} `)
 			: '';
 
 		const separator = clc.blackBright('│');
@@ -125,7 +129,7 @@ consoleFormatters.push(
 		}
 
 		const header =
-			`${timeLabel}${timeLabel ? ' ' : ''}${levelLabel}${categoryLabel ? ` ${categoryLabel}` : ''}`.trim();
+			`${timeLabel}${levelLabel}${categoryLabel ? ` ${categoryLabel}` : ''}`.trim();
 		const visibleLength = clc.strip(header).length;
 		const padding = ' '.repeat(Math.max(0, 12 - visibleLength));
 
@@ -203,7 +207,6 @@ const logger = ((message: any, options: any = {}) => {
 	return winstonLogger.info(message, options);
 }) as unknown as KythiaLogger;
 
-// Proxy winston methods to the wrapper
 const methods = [
 	'error',
 	'warn',
@@ -230,7 +233,6 @@ for (const method of methods) {
 	(logger as any)[method] = winstonLogger[method].bind(winstonLogger);
 }
 
-// Attach transports and other properties
 logger.transports = winstonLogger.transports;
 logger.level = winstonLogger.level;
 logger.levels = winstonLogger.levels;

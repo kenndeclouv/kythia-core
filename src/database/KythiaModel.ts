@@ -3,7 +3,7 @@
  *
  * @file src/database/KythiaModel.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -38,6 +38,7 @@ import type {
 	CacheEntry,
 	KythiaModelStructure,
 } from '../types/KythiaModel';
+import type { KythiaLogger } from '@src/types';
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
@@ -45,7 +46,7 @@ const RECONNECT_DELAY_MINUTES = 3;
 const REDIS_ERROR_TOLERANCE_COUNT = 3;
 const REDIS_ERROR_TOLERANCE_INTERVAL_MS = 10 * 1000;
 
-function safeStringify(obj: any, logger: any): string {
+function safeStringify(obj: any, logger: KythiaLogger): string {
 	try {
 		return JSON.stringify(obj, (_key, value) =>
 			typeof value === 'bigint' ? value.toString() : value,
@@ -56,7 +57,7 @@ function safeStringify(obj: any, logger: any): string {
 	}
 }
 
-function safeParse(str: string, logger: any): any {
+function safeParse(str: string, logger: KythiaLogger): any {
 	try {
 		return JSON.parse(str);
 	} catch {
@@ -74,7 +75,7 @@ export class KythiaModel<
 	static client: any;
 	static redis: Redis | undefined;
 	static isRedisConnected = false;
-	static logger: any = kythiaLogger;
+	static logger: KythiaLogger;
 	static config: KythiaConfig | {} = {};
 	static CACHE_VERSION = '1.0.0';
 

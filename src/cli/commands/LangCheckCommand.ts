@@ -3,7 +3,7 @@
  *
  * @file src/cli/commands/LangCheckCommand.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -295,20 +295,20 @@ export default class LangCheckCommand extends Command {
 							`Variable/Unknown at ${path.relative(PROJECT_ROOT, file)}:${line}`,
 						);
 					}
-				} catch (parseError: any) {
-					if (parseError.message.includes('Unexpected token')) {
+				} catch (error: any) {
+					if (error.message.includes('Unexpected token')) {
 						console.warn(
 							`\n\x1b[33m[WARN] Syntax Error parsing ${path.relative(
 								PROJECT_ROOT,
 								filePath,
-							)}:${parseError.loc?.line} - ${parseError.message}\x1b[0m`,
+							)}:${error.loc?.line} - ${error.message}\x1b[0m`,
 						);
 					} else {
 						console.error(
 							`\n\x1b[31m[ERROR] Failed to parse ${path.relative(
 								PROJECT_ROOT,
 								filePath,
-							)}: ${parseError.message}\x1b[0m`,
+							)}: ${error.message}\x1b[0m`,
 						);
 					}
 					filesWithErrors++;

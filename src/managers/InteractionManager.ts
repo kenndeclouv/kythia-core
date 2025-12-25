@@ -3,7 +3,7 @@
  *
  * @file src/managers/InteractionManager.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -33,22 +33,33 @@ import {
 	type UserContextMenuCommandInteraction,
 	type MessageContextMenuCommandInteraction,
 } from 'discord.js';
+
 import * as Sentry from '@sentry/node';
 import type { KythiaClient } from '../types/KythiaClient';
-import type { KythiaContainer } from '../types/KythiaContainer';
+
+import type {
+	KythiaContainer,
+	KythiaHelpersCollection,
+	KythiaModelsCollection,
+} from '../types/KythiaContainer';
+
 import type {
 	IInteractionManager,
 	InteractionManagerHandlers,
 } from '../types/InteractionManager';
+
 import type {
 	KythiaButtonHandler,
 	KythiaModalHandler,
 	KythiaSelectMenuHandler,
 	KythiaAutocompleteHandler,
 } from '../types/AddonManager';
+
 import type { KythiaConfig } from '../types/KythiaConfig';
 
 import { convertColor } from '../utils';
+import type { KythiaLogger, TranslateFunction } from '@src/types';
+import type { IMiddlewareManager } from '../types/MiddlewareManager';
 
 export class InteractionManager implements IInteractionManager {
 	public client: KythiaClient;
@@ -62,11 +73,11 @@ export class InteractionManager implements IInteractionManager {
 	public categoryToFeatureMap: Map<string, string>;
 
 	public kythiaConfig: KythiaConfig;
-	public models: any;
-	public helpers: any;
-	public logger: any;
-	public t: any;
-	public middlewareManager: any;
+	public models: KythiaModelsCollection;
+	public helpers: KythiaHelpersCollection;
+	public logger: KythiaLogger;
+	public t: TranslateFunction;
+	public middlewareManager: IMiddlewareManager | undefined;
 
 	public isOwner: (userId: string) => boolean;
 
@@ -179,6 +190,17 @@ export class InteractionManager implements IInteractionManager {
 					flags: MessageFlags.Ephemeral,
 				});
 				return;
+			}
+
+			if (command.mainGuildOnly) {
+				const mainGuildId = this.kythiaConfig.bot.devGuildId;
+				if (interaction.guildId !== mainGuildId) {
+					await interaction.reply({
+						content: '❌ This command is exclusive to the Kythia Main Server.',
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
+				}
 			}
 
 			if (this.middlewareManager) {
@@ -451,8 +473,9 @@ export class InteractionManager implements IInteractionManager {
 			}
 
 			await this._checkRestartSchedule(interaction);
-
-			await command.execute(interaction, this.container);
+			if (typeof command.execute === 'function') {
+				await command.execute(interaction, this.container);
+			}
 		} catch (error: any) {
 			this.logger.error('Error handling context menu command:', error);
 			this.container.telemetry?.report(

@@ -236,11 +236,11 @@ export class TelemetryManager {
 							process.exit(1);
 						}
 					}
-				} catch (innerError: any) {
-					this.logger.error('Error during heartbeat check:', innerError);
+				} catch (error: any) {
+					this.logger.error('Error during heartbeat check:', error);
 					this.report('error', 'Heartbeat Check Failed', {
-						message: innerError.message,
-						stack: innerError.stack,
+						message: error.message,
+						stack: error.stack,
 					});
 				}
 			}, randomMs);

@@ -3,7 +3,7 @@
  *
  * @file src/utils/InteractionFactory.ts
  * @copyright © 2025 kenndeclouv
- * @assistant chaa & graa
+ * @assistant graa & chaa
  * @version 0.12.5-beta
  *
  * @description
@@ -53,7 +53,8 @@ export const InteractionFactory = {
 			const resolvedOptions: any[] = [];
 			const remainingArgs = [...rawTokens];
 
-			let currentSchema = targetCommand?.slashCommand || targetCommand?.data;
+			let currentSchema: any =
+				targetCommand?.slashCommand || targetCommand?.data;
 
 			if (remainingArgs.length > 0 && currentSchema?.options) {
 				const potentialGroup = remainingArgs[0].toLowerCase();

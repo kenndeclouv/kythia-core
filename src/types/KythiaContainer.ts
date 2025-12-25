@@ -18,7 +18,9 @@ import type Redis from 'ioredis';
 import type { DiscordHelpers } from './DiscordHelpers';
 import type { TelemetryManager } from '../managers/TelemetryManager';
 
-export type AnySequelizeModel = ModelStatic<Model<any, any>>;
+export type AnySequelizeModel = ModelStatic<
+	Model<Record<string, unknown>, Record<string, unknown>>
+>;
 
 export type KythiaModelsCollection = Record<string, AnySequelizeModel>;
 
@@ -34,7 +36,7 @@ export interface KythiaContainer {
 	sequelize?: Sequelize;
 	kythiaConfig: KythiaConfig;
 	logger: KythiaLogger;
-	telemetry: TelemetryManager;
+	telemetry?: TelemetryManager;
 
 	redis?: Redis;
 
