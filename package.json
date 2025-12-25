@@ -81,11 +81,15 @@
 		"@types/figlet": "^1.7.0",
 		"@types/fs-extra": "^11.0.4",
 		"@types/glob": "^9.0.0",
+		"@types/jest": "^30.0.0",
 		"@types/node": "^24.10.1",
 		"@types/sequelize": "^4.28.20",
 		"husky": "^9.1.7",
 		"javascript-obfuscator": "^5.1.0",
+		"jest": "^30.2.0",
 		"lint-staged": "^16.2.7",
+		"sqlite3": "^5.1.7",
+		"ts-jest": "^29.4.6",
 		"ts-node-dev": "^2.0.0",
 		"typescript": "^5.9.3"
 	}
