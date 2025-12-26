@@ -12,6 +12,7 @@ biome.json
 tsconfig.json
 tsup.config.ts # Kalau pake tsup nanti
 nodemon.json
+obfuscator.config.json
 
 # --- Git & CI/CD ---
 .gitignore

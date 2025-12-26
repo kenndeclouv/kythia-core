@@ -15,8 +15,11 @@
 		"fix": "biome check --write .",
 		"prepare": "husky",
 		"build": "tsc && cp -r src/lang dist/lang",
+		"build:prod": "tsc && cp -r src/lang dist/lang && npm run obfuscate",
+		"obfuscate": "javascript-obfuscator dist --output dist --config obfuscator.config.json",
 		"watch": "tsc -w && cp -r src/lang dist/lang",
-		"dev": "bun format && rm -rf dist && bun run build && yalc push"
+		"dev": "bun format && rm -rf dist && bun run build && yalc push",
+		"prepublishOnly": "npm run build:prod"
 	},
 	"lint-staged": {
 		"*.{js,json}": [
