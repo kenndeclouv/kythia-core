@@ -4,7 +4,7 @@
  * @file src/cli/commands/NamespaceCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.6-beta
+ * @version 0.12.7-beta
  *
  * @description
  * Scans the entire project structure and automatically adds or updates
