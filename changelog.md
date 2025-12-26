@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.7-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.6-beta...v0.12.7-beta) (2025-12-26)
+
+
+### ✨ Added
+
+* Enhance license enforcement with a degraded mode, distributed checks, and obfuscated shutdown procedures. ([1f710c9](https://github.com/kenndeclouv/kythia-core/commit/1f710c9b2e05310c31e6746f41d4534a53fa0181))
+* implement JavaScript obfuscation for production builds with automated `prepublishOnly` hook and dedicated configuration. ([3174164](https://github.com/kenndeclouv/kythia-core/commit/3174164800096a3414771cfb79f5fd9975673621))
+
 ### [0.12.6-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.5-beta...v0.12.6-beta) (2025-12-25)
 
 
