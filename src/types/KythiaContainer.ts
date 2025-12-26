@@ -52,4 +52,7 @@ export interface KythiaContainer {
 	models: KythiaModelsCollection;
 	helpers: KythiaHelpersCollection;
 	appRoot: string;
+
+	// Internal flag for degraded mode (license check bypass detection)
+	_degraded?: boolean;
 }

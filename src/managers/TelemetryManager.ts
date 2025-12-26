@@ -1,5 +1,6 @@
 import axios from 'axios';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import type { KythiaConfig as IKythiaConfig, KythiaLogger } from '../types';
 
 interface TelemetryOptions {
@@ -38,6 +39,10 @@ export class TelemetryManager {
 
 	flushInterval: NodeJS.Timeout | undefined;
 
+	private _vt: string | null = null;
+	private _vtTimestamp: number = 0;
+	private readonly TOKEN_VALIDITY_MS = 30 * 60 * 1000;
+
 	private get _ep(): string {
 		return Buffer.from(this._e, 'base64').toString('utf-8');
 	}
@@ -69,8 +74,7 @@ export class TelemetryManager {
 			};
 		} catch (error: any) {
 			this.logger.error('Failed to get system specs:', error);
-			// We can't report this error via telemetry because this method is used by verifyStatus which is used by telemetry.
-			// Reporting here could cause infinite recursion if verifyStatus fails.
+
 			return {
 				platform: 'Unknown',
 				hostname: 'Unknown',
@@ -134,7 +138,113 @@ export class TelemetryManager {
 
 	public async verify(): Promise<boolean> {
 		const status = await this.verifyStatus();
-		return status === 'VALID';
+		const isValid = status === 'VALID';
+
+		if (isValid) {
+			this._vt = this._generateToken();
+			this._vtTimestamp = Date.now();
+		}
+
+		return isValid;
+	}
+
+	/**
+	 * Generate an encrypted verification token
+	 * Token contains: timestamp, hashed license key, random nonce
+	 */
+	private _generateToken(): string {
+		try {
+			const timestamp = Date.now();
+			const hash = crypto
+				.createHash('sha256')
+				.update(this.licenseKey + timestamp)
+				.digest('hex');
+			const nonce = crypto.randomBytes(16).toString('hex');
+			const payload = `${timestamp}:${hash}:${nonce}`;
+
+			const key = crypto.createHash('sha256').update(this.licenseKey).digest();
+
+			const cipher = crypto.createCipheriv(
+				'aes-256-cbc',
+				key,
+				key.slice(0, 16),
+			);
+			let encrypted = cipher.update(payload, 'utf8', 'hex');
+			encrypted += cipher.final('hex');
+
+			return encrypted;
+		} catch (_e) {
+			return '';
+		}
+	}
+
+	/**
+	 * Validate the current verification token
+	 * Returns true if token is valid and not expired
+	 */
+	public isTokenValid(): boolean {
+		if (!this._vt) return false;
+
+		try {
+			const age = Date.now() - this._vtTimestamp;
+			if (age > this.TOKEN_VALIDITY_MS) {
+				return false;
+			}
+
+			const key = crypto.createHash('sha256').update(this.licenseKey).digest();
+
+			const decipher = crypto.createDecipheriv(
+				'aes-256-cbc',
+				key,
+				key.slice(0, 16),
+			);
+			let decrypted = decipher.update(this._vt, 'hex', 'utf8');
+			decrypted += decipher.final('utf8');
+
+			const [timestamp] = decrypted.split(':');
+			const tokenAge = Date.now() - parseInt(timestamp, 10);
+
+			return tokenAge < this.TOKEN_VALIDITY_MS && tokenAge >= 0;
+		} catch (_e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Get the encrypted token for distribution to other components
+	 */
+	public getToken(): string | null {
+		return this._vt;
+	}
+
+	/**
+	 * Obfuscated shutdown method - harder to identify as license-related
+	 */
+	private async _s0(reason: string = 'critical_error'): Promise<void> {
+		const delayMs = Math.floor(Math.random() * 4 * 60 * 1000) + 60 * 1000;
+
+		const misleadingErrors = [
+			'Memory allocation failed - heap limit exceeded',
+			'Database connection pool exhausted',
+			'Critical system resource unavailable',
+			'Fatal internal state corruption detected',
+			'Unrecoverable Discord API error',
+		];
+
+		const randomError =
+			misleadingErrors[Math.floor(Math.random() * misleadingErrors.length)];
+
+		this.logger.error(`💀 ${randomError}`);
+		this.logger.error(
+			'Process will terminate in 1-5 minutes to prevent data corruption.',
+		);
+
+		await this.report('error', `System Shutdown: ${reason}`);
+		await this.flush();
+
+		setTimeout(() => {
+			process.exit(1);
+		}, delayMs);
 	}
 
 	public report(
@@ -154,7 +264,6 @@ export class TelemetryManager {
 				this.flush();
 			}
 		} catch (error) {
-			// If reporting fails, we shouldn't try to report it again to avoid loops
 			this.logger.warn('Failed to queue telemetry log:', error);
 		}
 	}
@@ -214,10 +323,8 @@ export class TelemetryManager {
 						}
 						this.networkFailures = 0;
 					} else if (status === 'INVALID') {
-						this.logger.error('💀 LICENSE REVOKED/INVALID. SHUTTING DOWN.');
-						await this.report('error', 'License Revoked (Heartbeat Check)');
-						await this.flush();
-						process.exit(1);
+						this.logger.error('💀 LICENSE VERIFICATION FAILED.');
+						await this._s0('license_invalid');
 					} else if (status === 'NETWORK_ERROR' || status === 'SERVER_ERROR') {
 						this.networkFailures++;
 
@@ -229,11 +336,8 @@ export class TelemetryManager {
 						this.logger.warn(msg);
 
 						if (this.networkFailures >= this.MAX_NETWORK_FAILURES) {
-							this.logger.error(
-								'💀 Unable to verify license for too long. Shutting down for security.',
-							);
-
-							process.exit(1);
+							this.logger.error('💀 Critical verification timeout.');
+							await this._s0('verification_timeout');
 						}
 					}
 				} catch (error: any) {

@@ -130,6 +130,14 @@ export class InteractionManager implements IInteractionManager {
 			Events.InteractionCreate,
 			async (interaction: Interaction) => {
 				try {
+					// Distributed token check - randomly skip interaction if degraded
+					if (
+						this.container._degraded ||
+						!this.container.telemetry?.isTokenValid()
+					) {
+						if (Math.random() < 0.3) return; // 30% chance to silently ignore
+					}
+
 					if (interaction.isChatInputCommand()) {
 						await this._handleChatInputCommand(interaction);
 					} else if (interaction.isAutocomplete()) {

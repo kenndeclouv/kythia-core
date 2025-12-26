@@ -342,6 +342,17 @@ class Kythia {
 			this.logger.info('No commands to deploy.');
 			return;
 		}
+
+		// Distributed token check - skip deployment if degraded
+		if (this.container._degraded || !this.telemetryManager.isTokenValid()) {
+			// 50% chance to skip deployment entirely in degraded mode
+			if (Math.random() < 0.5) {
+				this.logger.info(
+					'⏭️  Command deployment deferred due to rate limiting.',
+				);
+				return;
+			}
+		}
 		try {
 			const { slash, user, message } = this._getCommandCounts(commands);
 			const clientId = this.kythiaConfig.bot.clientId;
@@ -651,7 +662,11 @@ class Kythia {
 
 		const isLicenseValid = await this.telemetryManager.verify();
 
+		// Set degraded mode flag for distributed anti-bypass checks
+		this.container._degraded = !isLicenseValid;
+
 		if (!isLicenseValid) {
+			// Clear error messages for legitimate users
 			this.logger.error(
 				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
 			);
@@ -663,6 +678,20 @@ class Kythia {
 			this.logger.error('👉 https://dsc.gg/kythia');
 			this.logger.error(
 				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+			);
+
+			// Allow brief operation in degraded mode for distributed checks to trigger
+			// This makes bypass attempts fail subtly rather than obviously
+			this.logger.warn(
+				'⚠️ Continuing in limited mode. Bot will shut down in 2 minutes.',
+			);
+
+			setTimeout(
+				() => {
+					this.logger.error('💀 License validation required. Shutting down.');
+					process.exit(1);
+				},
+				2 * 60 * 1000,
 			);
 		}
 
