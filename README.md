@@ -9,394 +9,474 @@
 </h1>
 
 <p align="center">
-  <strong>The foundational engine for building scalable and maintainable Discord bots based on the Kythia framework.</strong>
+  <strong>Enterprise-Grade Discord Bot Framework</strong><br>
+  Modular · Scalable · Production-Ready
 </p>
 
 <p align="center">
-  <a href="https://github.com/kenndeclouv/kythia-core/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-CC%20BYNC%204.0-blue?style=for-the-badge" alt="License"></a>
+  <a href="https://github.com/kenndeclouv/kythia-core/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-CC%20BY%20NC%204.0-blue?style=for-the-badge" alt="License"></a>
+  <a href="https://github.com/kenndeclouv/kythia-core"><img src="https://img.shields.io/badge/version-0.12.7--beta-green?style=for-the-badge" alt="Version"></a>
+  <a href="https://discord.js.org"><img src="https://img.shields.io/badge/discord.js-v14-blue?style=for-the-badge&logo=discord" alt="Discord.js"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/kenndeclouv/kythia-core/issues">Report a Bug</a>
-  ·
-  <a href="https://github.com/kenndeclouv/kythia-core/issues">Request a Feature</a>
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="./ARCHITECTURE.md">Architecture</a> ·
+  <a href="./CLASS_REFERENCE.md">Class Reference</a> ·
+  <a href="./DEV_GUIDE.md">Dev Guide</a> ·
+  <a href="./CLI_REFERENCE.md">CLI Tools</a>
 </p>
 
-<div align="center">
-  <p><em>Powered by the following technologies:</em></p>
-  <img alt="Discord" src="https://img.shields.io/badge/Discord-5865F2.svg?style=flat&logo=Discord&logoColor=white">
-  <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-F7DF1E.svg?style=flat&logo=JavaScript&logoColor=black">
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-339933.svg?style=flat&logo=nodedotjs&logoColor=white">
-  <img alt="Sequelize" src="https://img.shields.io/badge/Sequelize-52B0E7.svg?style=flat&logo=Sequelize&logoColor=white">
-</div>
+---
+
+## 📚 Documentation
+
+This README provides a quick overview and getting started guide. For comprehensive documentation:
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Complete system architecture, design patterns, and data flow
+- **[CLASS_REFERENCE.md](./CLASS_REFERENCE.md)** - Full class and method documentation
+- **[DEV_GUIDE.md](./DEV_GUIDE.md)** - Development guide, best practices, and patterns
+- **[CLI_REFERENCE.md](./CLI_REFERENCE.md)** - CLI tools and commands reference
 
 ---
 
-## 🚀 Key Concepts & Architecture
+## 🌟 What is Kythia Core?
 
-`kythia-core` is built around a few core principles:
+**Kythia Core** is a powerful, production-ready framework for building scalable Discord bots. Built on top of discord.js v14, it provides a complete ecosystem for bot development with:
 
-1.  **Dependency Injection (DI) Container:** The heart of the interaction between the core and the consuming application (your main bot and its addons). The `Kythia` class accepts a `dependencies` object during construction and stores critical instances (like the logger, config, database models, core helpers, etc.) in a `container` object attached to the `client`. **Addons MUST access shared resources via this container (`interaction.client.container`) within their execution context (e.g., inside `execute` functions) to prevent critical circular dependency issues during startup.**
-2.  **Manager Pattern:** Core responsibilities are delegated to specialized managers:
-    * `AddonManager`: Discovers, loads, and registers commands, events, and components from addons.
-    * `EventManager`: Handles all non-interaction Discord gateway events, routing them to relevant addon handlers.
-    * `InteractionManager`: Handles all `InteractionCreate` events (slash commands, buttons, modals, autocomplete, context menus), including permission checks, cooldowns, and DI for command execution.
-    * `ShutdownManager`: Manages graceful shutdown procedures, tracking intervals and cleaning up active components.
-3.  **Addon-Driven Functionality:** The core provides the *framework*, but the actual bot features (commands, specific event responses) are implemented within **addons** in the main bot application. The core is designed to discover and integrate these addons seamlessly.
-4.  **Smart Database Layer:** Includes a base model (`KythiaModel`) with an advanced caching layer and an intelligent ORM utility (`KythiaORM`) for safe and efficient schema synchronization.
-
----
-
-## 🔧 Core Components (Exports)
-
-This package exports the following key components via its main `index.js`:
-
-### `Kythia` (Default Export & Named Export)
-
-* **File:** `src/Kythia.js`
-* **Role:** The main orchestrator class. It initializes all managers, manages the startup sequence, and holds the central dependency container.
-* **Usage:**
-    * Instantiated in your main bot's `index.js` (`new Kythia(dependencies)`).
-    * Requires a `dependencies` object containing essential services (`config`, `logger`, `translator`, `redis`, `sequelize`, `helpers`, `utils`, `appRoot`).
-    * Requires `dbDependencies` to be set *after* instantiation but *before* `start()`.
-    * The `start()` method initiates the entire bot lifecycle (addon loading, DB sync, Discord login).
-
-### `KythiaClient`
-
-* **File:** `src/KythiaClient.js`
-* **Role:** An extended `discord.js` Client class. It's pre-configured with recommended intents, partials, and cache settings for a typical large bot. Crucially, the `container` is attached directly to the client instance (`client.container`) for easy access within interactions and events.
-* **Usage:** Automatically instantiated by the `Kythia` class constructor. Addons access it via `interaction.client` or `container.client`.
-
-### `KythiaModel`
-
-* **File:** `src/database/KythiaModel.js`
-* **Role:** The **base class for ALL Sequelize models** used within the Kythia framework (both core and addons). It provides a powerful, built-in caching layer.
-* **Key Features:**
-    * **Hybrid Caching:** Prioritizes Redis for shared caching, seamlessly falls back to an in-memory Map cache if Redis is unavailable, ensuring high availability.
-    * **Cache Methods:** Provides `getCache(query)`, `getAllCache(query)`, `findOrCreateWithCache(options)`, `countWithCache(options)`, `aggregateWithCache(options)` for efficient data retrieval.
-    * **Automatic Invalidation:** Includes Sequelize lifecycle hooks (`afterSave`, `afterDestroy`, `afterBulkUpdate`, etc.) that automatically invalidate relevant cache entries using **tag-based sniper invalidation** for precision.
-    * **Dependency Injection:** Requires core dependencies (`logger`, `config`, `redis`) to be injected *once* at startup using the static `KythiaModel.setDependencies({...})` method in your main `index.js`.
-    * **Parent Touching:** Includes helpers (`touchParent`, `setupParentTouch`) for automatically updating parent model timestamps when child models change (useful for cache invalidation).
-* **Usage:** All addon models **must** `extend KythiaModel` and implement their own `static init(sequelize)` method which calls `super.init(...)`.
-
-### `createSequelizeInstance`
-
-* **File:** `src/database/KythiaSequelize.js`
-* **Role:** A factory function that creates and configures the main Sequelize instance based on your bot's configuration.
-* **Usage:** Called in your main `index.js` to create the `sequelize` instance that gets passed into the `Kythia` constructor.
-
-### `KythiaORM`
-
-* **File:** `src/database/KythiaORM.js`
-* **Role:** An intelligent database synchronization utility designed for safety and efficiency, especially in production.
-* **Key Features:**
-    * **Loads All Addon Models:** Automatically discovers and requires all model files within the `addons/*/database/models` directories, ensuring Sequelize is aware of them before syncing. Uses the `appRoot` from the container to find the `addons` directory.
-    * **Hash-Based Syncing:** Generates a schema hash for each model (`generateModelHash`). It compares this hash against a stored version in the `model_versions` table.
-    * **Selective `alter: true`:** Only runs `model.sync({ alter: true })` on models whose schema hash has actually changed, significantly speeding up startup and reducing risk.
-    * **Destructive Change Prevention:** Includes a `checkForDestructiveChanges` check. If it detects that syncing would drop columns, it prompts for confirmation in production or warns in development, preventing accidental data loss.
-    * **Handles `dbReadyHooks`:** Executes hooks registered via `kythiaInstance.addDbReadyHook()` *after* all models are loaded but *before* syncing (typically used for defining model associations).
-    * **Attaches Cache Hooks:** Calls `KythiaModel.attachHooksToAllModels()` after models are ready.
-* **Usage:** Called internally by `Kythia.start()`.
-
-### `utils`
-
-* **File:** `src/utils/index.js` (Barrel File)
-* **Role:** Exports common utility functions used within the core and potentially by addons.
-* **Available Utils:**
-    * `color`: Color conversion utilities (e.g., hex to decimal).
-    * `formatter`: Data formatting functions.
-* **Usage:** Accessed via `require('@kenndeclouv/kythia-core').utils`. Example: `utils.color.convertColor(...)`.
+- 🔌 **Addon System** - Modular architecture with hot-loadable addons
+- 🗄️ **Advanced ORM** - Hybrid Redis/LRU caching with automatic invalidation
+- 🔄 **Migration System** - Laravel-style migrations with batch support
+- 🎯 **Smart Routing** - Automatic command, event, and component registration
+- 🛡️ **Middleware** - Flexible permission, cooldown, and validation system
+- 📦 **Dependency Injection** - Clean, testable architecture with DI container
+- 🔧 **CLI Tools** - Powerful development tools for scaffolding and management
+- 📊 **Telemetry** - Built-in monitoring with Sentry integration
+- 🌐 **i18n** - Complete localization system with auto-translation
+- ⏰ **Task Scheduler** - Cron and interval-based task system
 
 ---
 
-## 📦 Installation
+## 🏗️ Core Architecture
 
-```bash
-npm install @kenndeclouv/kythia-core
-# or
-yarn add @kenndeclouv/kythia-core
-# or
-pnpm add @kenndeclouv/kythia-core
-````
-
-**Important:** This package declares `discord.js` as a **peer dependency**. Your main bot application **must** have `discord.js` installed as a direct dependency.
-
-```bash
-npm install discord.js
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Kythia Core                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   Addon      │  │  Interaction │  │    Event     │     │
+│  │   Manager    │  │   Manager    │  │   Manager    │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  Translator  │  │   Shutdown   │  │  Telemetry   │     │
+│  │   Manager    │  │   Manager    │  │   Manager    │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+├─────────────────────────────────────────────────────────────┤
+│                    Database Layer                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │    Kythia    │  │    Kythia    │  │   Kythia     │     │
+│  │    Model     │  │   Migrator   │  │  Sequelize   │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+├─────────────────────────────────────────────────────────────┤
+│                   Caching Layer                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Redis (Primary) ↔ LRU Map (Fallback)               │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
------
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system design.
 
-## 🚀 Basic Usage (in your main `index.js`)
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+npm install kythia-core discord.js
+# or
+yarn add kythia-core discord.js
+# or
+pnpm add kythia-core discord.js
+```
+
+### Basic Setup
 
 ```javascript
-// 1. Load Environment & Aliases (if used)
-require('dotenv').config();
-const kythiaConfig = require('./kythia.config.js');
-require('module-alias/register'); // Important for addon helpers/models if you use aliases
+// index.js
+const { Kythia, KythiaModel, createSequelizeInstance } = require('kythia-core');
+const config = require('./kythia.config.js');
 
-// 2. Import Core Components
-const {
-  Kythia,
-  KythiaModel,
-  createSequelizeInstance,
-  utils, // Example: Accessing utils
-} = require('@kenndeclouv/kythia-core');
-
-// 3. Load Your Addon Helpers (NOT Core Helpers)
-//    Core helpers like logger, translator are INJECTED, not required here directly
-//    unless they are specifically designed to be standalone.
-const logger = require('@coreHelpers/logger'); // Assuming this comes from your 'core' addon
-const translator = require('@coreHelpers/translator'); // Assuming this comes from your 'core' addon
-const { isTeam, isOwner, embedFooter } = require('@coreHelpers/discord'); // from 'core' addon
-const { loadFonts } = require('@coreHelpers/fonts'); // from 'core' addon
-
-// 4. Setup External Dependencies (Redis)
+// 1. Setup dependencies
+const logger = require('./core/helpers/logger');
+const translator = require('./core/helpers/translator');
 const Redis = require('ioredis');
-const redisClient = new Redis(kythiaConfig.db.redis, { lazyConnect: true });
+const redis = new Redis(config.db.redis, { lazyConnect: true });
 
-// 5. Setup Sequelize
-const sequelize = createSequelizeInstance(kythiaConfig, logger);
+// 2. Create Sequelize instance
+const sequelize = createSequelizeInstance(config, logger);
 
-// 6. Inject Dependencies into KythiaModel (CRITICAL - DO THIS ONLY ONCE)
-KythiaModel.setDependencies({ logger, config: kythiaConfig, redis: redisClient });
+// 3. Inject dependencies into KythiaModel
+KythiaModel.setDependencies({ logger, config, redis });
 
-// 7. Prepare the Dependency Container Object
+// 4. Create dependency container
 const dependencies = {
-    config: kythiaConfig,
-    logger: logger, // Your logger instance
-    translator: translator, // Your translator instance
-    redis: redisClient,
-    sequelize: sequelize,
-    models: {}, // Will be populated by KythiaORM after loading addon models
-    helpers: { // Your addon helpers accessible via container
-        discord: { isTeam, isOwner, embedFooter },
-        fonts: { loadFonts },
-        color: utils.color, // Injecting core color util as a helper
-        // Add other shared addon helpers here if needed
-    },
-    appRoot: __dirname, // CRITICAL: Tell the core where your project root is
+  config,
+  logger,
+  translator,
+  redis,
+  sequelize,
+  models: {},
+  helpers: {
+    // Your addon helpers
+  },
+  appRoot: __dirname,
 };
 
-// 8. Instantiate and Start Kythia
-try {
-    const kythiaInstance = new Kythia(dependencies);
-
-    // Set dependencies needed specifically by KythiaORM/Model Hooks
-    kythiaInstance.dbDependencies = {
-        KythiaModel,
-        logger,
-        config: kythiaConfig,
-    };
-
-    // Liftoff! 🚀
-    kythiaInstance.start();
-
-} catch (error) {
-    const log = logger || console;
-    log.error('🔥 FATAL ERROR during initialization:', error);
-    process.exit(1);
-}
+// 5. Initialize and start
+const kythia = new Kythia(dependencies);
+kythia.dbDependencies = { KythiaModel, logger, config };
+kythia.start();
 ```
 
------
+### Project Structure
 
-## 💡 Dependency Injection & The Container (CRITICAL FOR ADDONS)
+```
+your-bot/
+├── addons/
+│   ├── core/                  # Core addon
+│   │   ├── addon.json        # Addon metadata
+│   │   ├── commands/         # Slash commands
+│   │   ├── events/           # Discord events
+│   │   ├── buttons/          # Button handlers
+│   │   ├── modals/           # Modal handlers
+│   │   ├── select_menus/     # Select menu handlers
+│   │   ├── tasks/            # Scheduled tasks
+│   │   ├── database/
+│   │   │   ├── models/       # Sequelize models
+│   │   │   └── migrations/   # Database migrations
+│   │   └── register.js       # Addon initialization
+│   └── feature/              # Feature addon
+│       └── ...
+├── kythia.config.js          # Bot configuration
+├── package.json
+└── index.js                  # Entry point
+```
 
-**Problem:** Loading addons dynamically while allowing addons to use core functionalities (like models or helpers which *also* depend on the core) creates **circular dependencies**. If an addon command file tries to `require` a core helper or model at the top level, Node.js will often fail because the core (`kythia-core`) is still in the middle of loading that addon file\!
+---
 
-**Solution:** The **Dependency Injection Container (`interaction.client.container`)**.
+## ⚙️ Configuration
 
-  * The `Kythia` core initializes all essential services and instances (`logger`, `config`, loaded `models`, core `helpers`, etc.) and puts them into the `container`.
-  * **Addon commands, events, and other components MUST access these shared resources via the container.** This access typically happens *inside* the function that handles the interaction or event (e.g., inside the `async execute(interaction)` function for commands).
-
-**Example (Inside an Addon Command File):**
+Create `kythia.config.js`:
 
 ```javascript
-// addons/your-addon/commands/your-command.js
-
-// ✅ OK: Require external libs or discord.js stuff at top level
-const { EmbedBuilder } = require('discord.js');
-
-// ❌ BAD: DO NOT require core helpers or models at the top level!
-// const logger = require('@coreHelpers/logger'); // WRONG - Causes circular dependency
-// const YourModel = require('../database/models/YourModel'); // WRONG
-
 module.exports = {
-  data: /* ... your SlashCommandBuilder ... */,
-  async execute(interaction) {
-    // ✅ GOOD: Access everything from the container HERE
-    const { logger, models, translator, helpers, kythiaConfig } = interaction.client.container;
-    const { YourModel } = models; // Get the initialized model
-    const { t } = translator; // Get the translation function
-    const { someHelper } = helpers.yourCoreHelpers; // Get helpers
+  bot: {
+    token: process.env.DISCORD_TOKEN,
+    clientId: process.env.CLIENT_ID,
+    testGuildId: process.env.TEST_GUILD_ID,
+  },
+  db: {
+    mysql: {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      database: process.env.DB_NAME,
+      username: process.env.DB_USER,
+      password: process.env.DB_PASS,
+    },
+    redis: {
+      host: process.env.REDIS_HOST,
+      port: process.env.REDIS_PORT,
+    },
+  },
+  addons: {
+    // Addon configuration
+    core: { active: true, priority: 0 },
+    feature: { active: true, priority: 50 },
+  },
+};
+```
 
-    // Now you can safely use them
-    logger.info('Executing your command!');
-    const data = await YourModel.getCache({ userId: interaction.user.id });
-    await interaction.reply(await t(interaction, 'your.translation.key'));
-    // ...
-  }
+---
+
+## 🔌 Creating Your First Addon
+
+### 1. Create addon structure
+
+```bash
+npx kythia make:addon --name myfeature
+```
+
+### 2. Define addon metadata
+
+```json
+// addons/myfeature/addon.json
+{
+  "name": "myfeature",
+  "version": "1.0.0",
+  "priority": 50,
+  "dependencies": ["core"]
 }
 ```
 
-**Adhering to this DI pattern is essential for preventing startup errors.**
+### 3. Create a command
 
------
+```javascript
+// addons/myfeature/commands/hello.js
+const { SlashCommandBuilder } = require('discord.js');
 
-## 🧩 Addon Development Integration
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('hello')
+    .setDescription('Say hello!'),
+    
+  async execute(interaction) {
+    const { logger } = interaction.client.container;
+    
+    logger.info('Hello command executed!');
+    await interaction.reply('Hello, World!');
+  }
+};
+```
 
-`kythia-core` is designed to work seamlessly with your addon structure:
+### 4. Create a scheduled task
 
-1.  **Discovery:** `AddonManager` scans the `addons/` directory located relative to the `appRoot` provided in the dependencies.
-2.  **Metadata (`addon.json`):** Each addon **must** have an `addon.json` file in its root directory. This file provides:
-      * `name`: Display name.
-      * `version`: Addon version.
-      * `description`: What it does.
-      * `author`: Who made it.
-      * `active` (optional, default `true`): Set to `false` to disable the addon.
-      * `featureFlag` (optional): The corresponding boolean key in `ServerSetting` model that toggles this addon's commands per-guild (e.g., `"petOn"`). `AddonManager` uses this to perform automatic checks in `InteractionManager`.
-3.  **Initialization (`register.js` - Optional):** If an addon needs to perform setup tasks *after* the core is initialized but *before* the bot logs in (e.g., define model associations, register non-command components), it can include a `register.js` file exporting an `initialize` function:
-    ```javascript
-    // addons/your-addon/register.js
-    module.exports = {
-      async initialize(kythiaInstance) {
-        // Access core components via kythiaInstance.container
-        const { logger } = kythiaInstance.container;
+```javascript
+// addons/myfeature/tasks/daily-report.js
+module.exports = {
+  schedule: '0 0 * * *', // Daily at midnight
+  
+  async execute(container) {
+    const { logger } = container;
+    logger.info('Running daily report...');
+  }
+};
+```
 
-        // Example: Register a button handler
-        kythiaInstance.registerButtonHandler('myButtonPrefix', require('./buttons/myButtonHandler'));
+See [DEV_GUIDE.md](./DEV_GUIDE.md) for complete addon development guide.
 
-        // Example: Define model associations (runs after models are loaded by KythiaORM)
-        kythiaInstance.addDbReadyHook((sequelize) => {
-          const { ModelA, ModelB } = sequelize.models;
-          if (ModelA && ModelB) {
-            ModelA.hasMany(ModelB);
-            ModelB.belongsTo(ModelA);
-            logger.info('🔗 Model associations for YourAddon defined.');
-          }
-        });
+---
 
-        // Return an array of strings for summary logging (optional)
-        return ['✅ YourAddon component registered.'];
-      }
-    }
-    ```
-4.  **Command Loading:** `AddonManager` looks for commands within an addon's `commands/` directory. It supports flexible structures:
-      * **Simple Commands:** A single `.js` file per command (e.g., `ping.js`).
-      * **Grouped Commands (Top-Level):** A `_command.js` file defining the main command (`/image`), with `.js` files for subcommands (`add.js`, `list.js`) and subdirectories for groups (`admin/_group.js` with `add.js`, `delete.js` inside). `subcommand: true` must be set in the subcommand module exports.
-      * **Individual Command Folders:** A folder per command (e.g., `ping/`) containing `_command.js` for the main definition and potentially subcommand/group files inside.
+## 🗄️ Database & Models
 
------
+### Creating a Model
 
-## 🗄️ Database Layer (`KythiaModel` & Migrations)
+```bash
+npx kythia make:model --name User --addon myfeature
+```
 
-The core abandons traditional `sync()` operations in favor of a robust, **Laravel-style migration system** combined with **Database Introspection**.
+```javascript
+// addons/myfeature/database/models/User.js
+const { KythiaModel } = require('kythia-core');
+const { DataTypes } = require('sequelize');
 
-### 1. `KythiaModel` (The Base Model)
-* **Hybrid Caching:** Provides a zero-config caching layer. It prioritizes **Redis** for distributed caching and falls back to a local **LRU Map** if Redis is unreachable (Shard Mode aware).
-* **Auto-Boot Introspection:** You don't need to define attributes manually in your model classes. The `autoBoot` method automatically introspects the database table schema to define Sequelize attributes at runtime.
-* **Smart Invalidation:** Includes `afterSave`, `afterDestroy`, and `afterBulk` hooks that automatically invalidate cache entries using **tag-based sniper invalidation** (e.g., clearing `User:ID:1` also clears related queries).
+class User extends KythiaModel {
+  static tableName = 'users';
+  
+  static init(sequelize) {
+    return super.init({
+      userId: {
+        type: DataTypes.STRING,
+        unique: true,
+      },
+      username: DataTypes.STRING,
+      points: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+      },
+    }, {
+      sequelize,
+      modelName: 'User',
+      tableName: this.tableName,
+    });
+  }
+}
 
-### 2. `KythiaMigrator` (Migration Engine)
-* **Addon Scanning:** Automatically discovers migration files located in `addons/*/database/migrations`.
-* **Laravel-Style Batching:** Uses a custom `LaravelStorage` adapter for Umzug. It tracks migration **batches** (not just files), allowing you to rollback the entire last deployment (batch) rather than one file at a time.
-* **Production Safe:** Schema changes are strictly handled via migration files, eliminating the risk of accidental data loss caused by `sequelize.sync({ alter: true })` in production environments.
+module.exports = User;
+```
 
------
+### Using the Model with Cache
 
-## �️ CLI Tools & Commands
+```javascript
+// In your command
+const { models } = interaction.client.container;
+const { User } = models;
 
-Kythia Core comes with a powerful CLI to streamline development, database management, and localization tasks.
+// Get with cache (auto Redis/LRU)
+const user = await User.getCache({
+  where: { userId: interaction.user.id }
+});
 
-Run `npx kythia --help` to see all available commands.
+// Create with cache invalidation
+const newUser = await User.create({
+  userId: interaction.user.id,
+  username: interaction.user.username,
+});
+```
 
-### Database Management
+### Creating Migrations
 
-#### `migrate`
-Run pending database migrations.
+```bash
+npx kythia make:migration --name create_users_table --addon myfeature
+```
+
+```javascript
+// addons/myfeature/database/migrations/20250128000000_create_users_table.js
+module.exports = {
+  up: async (queryInterface, DataTypes) => {
+    await queryInterface.createTable('users', {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+      userId: {
+        type: DataTypes.STRING,
+        unique: true,
+      },
+      points: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+      },
+      createdAt: DataTypes.DATE,
+      updatedAt: DataTypes.DATE,
+    });
+  },
+  
+  down: async (queryInterface) => {
+    await queryInterface.dropTable('users');
+  }
+};
+```
+
+Run migrations:
 ```bash
 npx kythia migrate
 ```
-**Options:**
-*   `-f, --fresh`: **[DANGER]** Wipe the entire database (drop all tables) and re-run all migrations from scratch.
-*   `-r, --rollback`: Rollback the last *batch* of migrations.
 
-#### `make:migration`
-Create a new timestamped migration file in an addon.
-```bash
-npx kythia make:migration --name create_users_table --addon core
-```
-**Options:**
-*   `--name <string>`: Name of the migration (snake_case recommended).
-*   `--addon <string>`: Target addon name (must exist in `addons/`).
+---
 
-#### `make:model`
-Scaffold a new Sequelize model file in an addon.
-```bash
-npx kythia make:model --name User --addon core
-```
-**Options:**
-*   `--name <string>`: Name of the model (PascalCase recommended).
-*   `--addon <string>`: Target addon name.
+## 🛠️ CLI Tools
 
-#### `cache:clear`
-Flush Redis cache. Supports multi-instance selection if `REDIS_URLS` is configured.
+Kythia Core includes powerful CLI tools:
+
 ```bash
-npx kythia cache:clear
+# Database
+npx kythia migrate                    # Run migrations
+npx kythia migrate --fresh            # Fresh migration
+npx kythia migrate --rollback         # Rollback last batch
+npx kythia make:migration             # Create migration
+npx kythia make:model                 # Create model
+npx kythia cache:clear                # Clear Redis cache
+
+# Localization
+npx kythia lang:check                 # Check translation keys
+npx kythia lang:translate --target ja # Auto-translate
+
+# Development
+npx kythia dev:namespace              # Add JSDoc headers
+npx kythia gen:structure              # Generate project tree
+npx kythia version:up                 # Sync version tags
 ```
 
-### Localization (i18n)
+See [CLI_REFERENCE.md](./CLI_REFERENCE.md) for complete command reference.
 
-#### `lang:check`
-Lint translation key usage in your code against your language files.
-```bash
-npx kythia lang:check
+---
+
+## 🎯 Key Features
+
+### Addon Dependency Management
+
+```json
+{
+  "name": "analytics",
+  "priority": 50,
+  "dependencies": ["core", "database"]
+}
 ```
-*   **Static Analysis:** Uses AST parsing to find `t('key')` calls.
-*   **Validation:** Reports missing keys in JSON files.
-*   **Unused Keys:** Reports keys defined in `en.json` but never used in code.
 
-#### `lang:translate`
-Auto-translate your `en.json` to a target language using Google Gemini AI.
-```bash
-npx kythia lang:translate --target ja
+Addons are loaded in dependency order with automatic validation.
+
+### Task Scheduling
+
+```javascript
+// Cron-based
+module.exports = {
+  schedule: '*/5 * * * *', // Every 5 minutes
+  execute: async (container) => { /* ... */ }
+};
+
+// Interval-based
+module.exports = {
+  schedule: 60000, // Every 60 seconds
+  execute: async (container) => { /* ... */ }
+};
 ```
-**Options:**
-*   `--target <lang>`: Target language code (default: `ja`).
-*   **Requires:** `GEMINI_API_KEYS` in `.env`.
 
-### Development Utilities
+### Middleware System
 
-#### `dev:namespace`
-Automatically add or update JSDoc `@namespace` headers in all project files.
-```bash
-npx kythia dev:namespace
+```javascript
+const { botPermissions } = require('kythia-core/middlewares');
+
+module.exports = {
+  data: /* ... */,
+  middlewares: [
+    botPermissions(['SendMessages', 'EmbedLinks']),
+  ],
+  execute: async (interaction) => { /* ... */ }
+};
 ```
-Useful for maintaining consistent file documentation and ownership headers.
 
-#### `gen:structure`
-Generate a markdown tree representation of your project structure.
-```bash
-npx kythia gen:structure
+### Hybrid Caching
+
+Automatic Redis + LRU fallback with tag-based invalidation:
+
+```javascript
+// Automatically uses Redis if available, falls back to LRU
+const user = await User.getCache({ where: { id: 1 } });
+
+// Automatic cache invalidation on updates
+await user.update({ points: 100 }); // Cache auto-cleared
 ```
-Outputs to `temp/structure.md`. Great for documentation or sharing context with AI.
 
-#### `version:up`
-Synchronize JSDoc `@version` tags across the project with `package.json`.
-```bash
-npx kythia version:up
-```
-Run this after bumping your package version to keep file headers in sync.
+---
 
------
+## 📖 Advanced Topics
 
-## 🔗 Peer Dependencies
+- **[Dependency Injection Pattern](./DEV_GUIDE.md#dependency-injection)** - Avoiding circular dependencies
+- **[Migration Best Practices](./DEV_GUIDE.md#migrations)** - Safe schema management
+- **[Cache Strategies](./DEV_GUIDE.md#caching)** - Optimizing performance
+- **[Addon Architecture](./ARCHITECTURE.md#addon-system)** - Building scalable addons
+- **[Testing Guide](./DEV_GUIDE.md#testing)** - Writing tests for your bot
+- **[Deployment](./DEV_GUIDE.md#deployment)** - Production deployment guide
 
-  * **`discord.js`:** This is a `peerDependency`. `kythia-core` requires `discord.js` to function, but it expects the *consuming application* (your main bot) to provide it by listing `discord.js` in its own `dependencies`. This prevents version conflicts and issues with `instanceof` checks, especially common when using `npm link` during development. Ensure your main bot project has `discord.js` installed.
+---
 
------
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines.
+
+---
 
 ## 📜 License
 
 This project is licensed under the CC BY NC 4.0 License - see the [LICENSE](./LICENSE) file for details.
+
+---
+
+## 🔗 Links
+
+- [Documentation](./ARCHITECTURE.md)
+- [Class Reference](./CLASS_REFERENCE.md)
+- [Developer Guide](./DEV_GUIDE.md)
+- [CLI Reference](./CLI_REFERENCE.md)
+- [GitHub Issues](https://github.com/kenndeclouv/kythia-core/issues)
+- [Discord Server](https://discord.gg/your-server)
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/kenndeclouv">kenndeclouv</a>
+</p>

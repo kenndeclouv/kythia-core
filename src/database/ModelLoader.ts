@@ -37,6 +37,21 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 	logger.info('📂 Scanning & Booting Models...');
 
 	for (const addon of addonFolders) {
+		// Skip disabled addons
+		try {
+			const configAddons = container.kythiaConfig?.addons || {};
+
+			if (
+				configAddons.all?.active === false ||
+				configAddons[addon]?.active === false
+			) {
+				logger.info(`🟠 Skipping models for disabled addon: ${addon}`);
+				continue;
+			}
+		} catch (e: any) {
+			logger.warn(`Failed to check config for addon ${addon}: ${e.message}`);
+		}
+
 		const modelsDir = path.join(addonsDir, addon, 'database', 'models');
 		if (fs.existsSync(modelsDir)) {
 			const files = fs.readdirSync(modelsDir).filter((f) => f.endsWith('.js'));

@@ -125,7 +125,8 @@ export default class AddonManager implements IAddonManager {
 		try {
 			if (this.selectMenuHandlers.has(customIdPrefix)) {
 				this.logger.warn(
-					`[REGISTRATION] Warning: Select menu handler for [${customIdPrefix}] already exists and will be overwritten.`,
+					`Select menu handler for [${customIdPrefix}] already exists and will be overwritten.`,
+					{ label: 'registration' },
 				);
 			}
 			this.selectMenuHandlers.set(customIdPrefix, handler);
@@ -155,7 +156,8 @@ export default class AddonManager implements IAddonManager {
 		try {
 			if (this.modalHandlers.has(customIdPrefix)) {
 				this.logger.warn(
-					`[REGISTRATION] Warning: Modal handler for [${customIdPrefix}] already exists and will be overwritten.`,
+					`Modal handler for [${customIdPrefix}] already exists and will be overwritten.`,
+					{ label: 'registration' },
 				);
 			}
 			this.modalHandlers.set(customIdPrefix, handler);
@@ -188,7 +190,8 @@ export default class AddonManager implements IAddonManager {
 		try {
 			if (this.autocompleteHandlers.has(commandName)) {
 				this.logger.warn(
-					`[REGISTRATION] Warning: Autocomplete handler for [${commandName}] already exists.`,
+					`Autocomplete handler for [${commandName}] already exists.`,
+					{ label: 'registration' },
 				);
 			}
 			this.autocompleteHandlers.set(commandName, handler);
@@ -223,7 +226,8 @@ export default class AddonManager implements IAddonManager {
 		try {
 			if (this.taskHandlers.has(taskName)) {
 				this.logger.warn(
-					`[REGISTRATION] Warning: Task handler for [${taskName}] already exists and will be overwritten.`,
+					`Task handler for [${taskName}] already exists and will be overwritten.`,
+					{ label: 'registration' },
 				);
 			}
 
@@ -306,6 +310,110 @@ export default class AddonManager implements IAddonManager {
 				},
 			);
 		}
+	}
+
+	/**
+	 * 🔍 Validate Addon Dependencies
+	 * Checks if all dependencies exist and are enabled
+	 */
+	private validateDependencies(
+		_addonName: string,
+		dependencies: string[],
+		allAddons: Set<string>,
+		disabledAddons: Set<string>,
+	): { valid: boolean; errors: string[] } {
+		const errors: string[] = [];
+
+		for (const dep of dependencies) {
+			if (!allAddons.has(dep)) {
+				errors.push(`Dependency "${dep}" not found`);
+			} else if (disabledAddons.has(dep)) {
+				errors.push(`Dependency "${dep}" is disabled`);
+			}
+		}
+
+		return {
+			valid: errors.length === 0,
+			errors,
+		};
+	}
+
+	/**
+	 * 📊 Topological Sort for Addon Dependencies
+	 * Ensures dependencies load before dependents using Kahn's algorithm
+	 */
+	private topologicalSort(
+		addons: Array<{
+			name: string;
+			dependencies: string[];
+			priority: number;
+		}>,
+	): string[] {
+		const graph = new Map<string, string[]>();
+		const inDegree = new Map<string, number>();
+
+		// Build graph
+		for (const addon of addons) {
+			graph.set(addon.name, addon.dependencies || []);
+			inDegree.set(addon.name, 0);
+		}
+
+		// Calculate in-degrees
+		for (const [_name, deps] of graph) {
+			for (const dep of deps) {
+				if (inDegree.has(dep)) {
+					inDegree.set(dep, (inDegree.get(dep) || 0) + 1);
+				}
+			}
+		}
+
+		// Topological sort (Kahn's algorithm)
+		const queue: string[] = [];
+		const result: string[] = [];
+
+		for (const [addon, degree] of inDegree) {
+			if (degree === 0) {
+				queue.push(addon);
+			}
+		}
+
+		while (queue.length > 0) {
+			// Sort queue by priority before processing
+			queue.sort((a, b) => {
+				const addonA = addons.find((x) => x.name === a);
+				const addonB = addons.find((x) => x.name === b);
+				const priorityA = addonA?.priority ?? 50;
+				const priorityB = addonB?.priority ?? 50;
+				if (priorityA !== priorityB) {
+					return priorityA - priorityB;
+				}
+				return a.localeCompare(b);
+			});
+
+			const current = queue.shift();
+			if (!current) continue;
+			result.push(current);
+
+			const deps = graph.get(current) || [];
+			for (const dep of deps) {
+				const degree = (inDegree.get(dep) ?? 0) - 1;
+				inDegree.set(dep, degree);
+				if (degree === 0) {
+					queue.push(dep);
+				}
+			}
+		}
+
+		// Check for circular dependencies
+		if (result.length !== addons.length) {
+			const remaining = addons.filter((a) => !result.includes(a.name));
+			this.logger.error(
+				`Circular dependency detected in addons: ${remaining.map((a) => a.name).join(', ')}`,
+				{ label: 'addon' },
+			);
+		}
+
+		return result;
 	}
 
 	/**
@@ -492,11 +600,92 @@ export default class AddonManager implements IAddonManager {
 			.readdirSync(addonsDir, { withFileTypes: true })
 			.filter((d) => d.isDirectory() && !d.name.startsWith('_'));
 
-		const coreAddon = addonFolders.find((d) => d.name === 'core');
-		const otherAddons = addonFolders.filter((d) => d.name !== 'core');
-		if (coreAddon) {
-			addonFolders = [coreAddon, ...otherAddons];
+		// Parse addon metadata (priority, dependencies)
+		const addonData = addonFolders.map((addon) => {
+			let priority = 50; // Default priority
+			let dependencies: string[] = [];
+
+			try {
+				const addonJsonPath = path.join(addonsDir, addon.name, 'addon.json');
+				if (fs.existsSync(addonJsonPath)) {
+					const addonJson = JSON.parse(fs.readFileSync(addonJsonPath, 'utf8'));
+					priority = addonJson.priority ?? 50;
+					dependencies = addonJson.dependencies || [];
+				}
+			} catch (_e) {
+				// Use defaults on error
+			}
+
+			return {
+				name: addon.name,
+				addon,
+				priority,
+				dependencies,
+			};
+		});
+
+		// Validate dependencies
+		const allAddonNames = new Set(addonData.map((a) => a.name));
+		const disabledAddons = new Set<string>();
+
+		// Check for disabled addons first (from kythia.config)
+		try {
+			const configAddons = this.container.kythiaConfig?.addons || {};
+			for (const data of addonData) {
+				if (
+					configAddons.all?.active === false ||
+					configAddons[data.name]?.active === false
+				) {
+					disabledAddons.add(data.name);
+				}
+			}
+		} catch (_e) {
+			// Continue with empty set
 		}
+
+		// Validate dependencies for each addon
+		for (const data of addonData) {
+			if (disabledAddons.has(data.name)) continue;
+
+			const validation = this.validateDependencies(
+				data.name,
+				data.dependencies,
+				allAddonNames,
+				disabledAddons,
+			);
+
+			if (!validation.valid) {
+				this.logger.error(
+					`Cannot load addon "${data.name}": ${validation.errors.join(', ')}`,
+					{ label: 'addon' },
+				);
+				disabledAddons.add(data.name);
+			}
+		}
+
+		// Topological sort (dependency-aware)
+		const validAddons = addonData.filter((a) => !disabledAddons.has(a.name));
+		const sortedNames = this.topologicalSort(validAddons);
+
+		// Map back to addon folders
+		addonFolders = sortedNames
+			.map((name) => addonData.find((a) => a.name === name))
+			.filter((data): data is (typeof addonData)[0] => data !== undefined)
+			.map((data) => data.addon);
+
+		// Log loading order
+		this.logger.info('📋 Addon loading order:');
+		sortedNames.forEach((name, index) => {
+			const data = addonData.find((a) => a.name === name);
+			if (!data) return;
+			const depsStr =
+				data.dependencies.length > 0
+					? ` [deps: ${data.dependencies.join(', ')}]`
+					: '';
+			this.logger.info(
+				`  ${index + 1}. ${name} (priority: ${data.priority})${depsStr}`,
+			);
+		});
 
 		const commandNamesSet = new Set<string>();
 		const addonSummaries = [];

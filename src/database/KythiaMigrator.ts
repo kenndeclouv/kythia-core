@@ -23,6 +23,7 @@ import { Umzug } from 'umzug';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { KythiaMigratorFunction } from '../types/KythiaMigrator';
+import type { KythiaContainer } from '../types';
 
 interface MigrationFile {
 	name: string;
@@ -30,17 +31,29 @@ interface MigrationFile {
 	folder: string;
 }
 
-function getMigrationFiles(rootDir: string): MigrationFile[] {
+function getMigrationFiles(
+	rootDir: string,
+	container: KythiaContainer,
+): MigrationFile[] {
 	const addonsDir = path.join(rootDir, 'addons');
 	if (!fs.existsSync(addonsDir)) return [];
 
 	const migrationFiles: MigrationFile[] = [];
+	const configAddons = container.kythiaConfig?.addons || {};
 
 	const addonFolders = fs
 		.readdirSync(addonsDir)
 		.filter((f) => fs.statSync(path.join(addonsDir, f)).isDirectory());
 
 	for (const addon of addonFolders) {
+		// Skip disabled addons
+		if (
+			configAddons.all?.active === false ||
+			configAddons[addon]?.active === false
+		) {
+			continue;
+		}
+
 		const migrationDir = path.join(addonsDir, addon, 'database', 'migrations');
 		if (fs.existsSync(migrationDir)) {
 			const files = fs
@@ -64,7 +77,7 @@ const KythiaMigrator: KythiaMigratorFunction = async ({
 	logger,
 }) => {
 	const rootDir = container.appRoot;
-	const migrations = getMigrationFiles(rootDir);
+	const migrations = getMigrationFiles(rootDir, container);
 
 	if (migrations.length === 0) {
 		logger.info('📭 No migrations found in addons.');
