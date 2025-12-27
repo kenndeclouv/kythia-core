@@ -218,6 +218,13 @@ export class TelemetryManager {
 	}
 
 	/**
+	 * Get the license key
+	 */
+	public getLicenseKey(): string {
+		return this.licenseKey;
+	}
+
+	/**
 	 * Obfuscated shutdown method - harder to identify as license-related
 	 */
 	private async _s0(reason: string = 'critical_error'): Promise<void> {
@@ -268,7 +275,7 @@ export class TelemetryManager {
 		}
 	}
 
-	private async flush() {
+	public async flush() {
 		if (this.logQueue.length === 0) return;
 
 		const logsToSend = [...this.logQueue];

@@ -24,6 +24,7 @@ import {
 } from 'discord.js';
 import path from 'node:path';
 import fs from 'node:fs';
+import cron from 'node-cron';
 import type {
 	IAddonManager,
 	KythiaClient as IKythiaClient,
@@ -32,6 +33,7 @@ import type {
 	KythiaModalHandler,
 	KythiaSelectMenuHandler,
 	KythiaAutocompleteHandler,
+	KythiaTaskHandler,
 	KythiaEventHandler,
 	CommandRegistrationSummary,
 	KythiaCommandModule,
@@ -47,6 +49,7 @@ export default class AddonManager implements IAddonManager {
 	modalHandlers: Map<string, KythiaModalHandler>;
 	selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
 	autocompleteHandlers: Map<string, KythiaAutocompleteHandler>;
+	taskHandlers: Map<string, any>;
 
 	commandCategoryMap: Map<string, string>;
 	categoryToFeatureMap: Map<string, string>;
@@ -71,6 +74,7 @@ export default class AddonManager implements IAddonManager {
 		this.modalHandlers = new Map();
 		this.selectMenuHandlers = new Map();
 		this.autocompleteHandlers = new Map();
+		this.taskHandlers = new Map();
 		this.commandCategoryMap = new Map();
 		this.categoryToFeatureMap = new Map();
 		this.embedDrafts = new Collection();
@@ -87,7 +91,8 @@ export default class AddonManager implements IAddonManager {
 		try {
 			if (this.buttonHandlers.has(customId)) {
 				this.logger.warn(
-					`[REGISTRATION] Warning: Button handler for [${customId}] already exists and will be overwritten.`,
+					`Button handler for [${customId}] already exists and will be overwritten.`,
+					{ label: 'registration' },
 				);
 			}
 			this.buttonHandlers.set(customId, handler);
@@ -95,6 +100,7 @@ export default class AddonManager implements IAddonManager {
 			this.logger.error(
 				`Failed to register button handler for [${customId}]:`,
 				error,
+				{ label: 'registration' },
 			);
 			this.container.telemetry?.report(
 				'error',
@@ -194,6 +200,106 @@ export default class AddonManager implements IAddonManager {
 			this.container.telemetry?.report(
 				'error',
 				`Register Autocomplete Handler Failed: [${commandName}]`,
+				{
+					message: error.message,
+					stack: error.stack,
+				},
+			);
+		}
+	}
+
+	/**
+	 * ⏰ Register Task Handler
+	 * Registers a scheduled task handler with either cron pattern or interval.
+	 * @param {string} taskName - The name of the task
+	 * @param {Function} handler - The task handler function
+	 * @param {string | number} schedule - Cron pattern (string) or interval in ms (number)
+	 */
+	registerTaskHandler(
+		taskName: string,
+		handler: KythiaTaskHandler,
+		schedule: string | number,
+	): void {
+		try {
+			if (this.taskHandlers.has(taskName)) {
+				this.logger.warn(
+					`[REGISTRATION] Warning: Task handler for [${taskName}] already exists and will be overwritten.`,
+				);
+			}
+
+			let taskRef: any;
+
+			if (typeof schedule === 'string') {
+				// Cron pattern
+				if (!cron.validate(schedule)) {
+					throw new Error(
+						`Invalid cron pattern: ${schedule} for task [${taskName}]`,
+					);
+				}
+
+				taskRef = cron.schedule(
+					schedule,
+					async () => {
+						try {
+							await handler(this.container);
+						} catch (error: any) {
+							this.logger.error(`Error in task [${taskName}]:`, error);
+							this.container.telemetry?.report(
+								'error',
+								`Task Execution Failed: [${taskName}]`,
+								{
+									message: error.message,
+									stack: error.stack,
+								},
+							);
+						}
+					},
+					{
+						scheduled: true,
+					},
+				);
+
+				this.logger.info(
+					`Registered cron task [${taskName}] with schedule: ${schedule}`,
+					{ label: 'task' },
+				);
+			} else if (typeof schedule === 'number') {
+				// Simple interval (tracked by ShutdownManager automatically)
+				taskRef = setInterval(async () => {
+					try {
+						await handler(this.container);
+					} catch (error: any) {
+						this.logger.error(`Error in task [${taskName}]:`, error);
+						this.container.telemetry?.report(
+							'error',
+							`Task Execution Failed: [${taskName}]`,
+							{
+								message: error.message,
+								stack: error.stack,
+							},
+						);
+					}
+				}, schedule);
+
+				this.logger.info(
+					`Registered interval task [${taskName}] with interval: ${schedule}ms`,
+					{ label: 'task' },
+				);
+			} else {
+				throw new Error(
+					`Invalid schedule type for task [${taskName}]: must be string (cron) or number (interval)`,
+				);
+			}
+
+			this.taskHandlers.set(taskName, taskRef);
+		} catch (error: any) {
+			this.logger.error(
+				`Failed to register task handler for [${taskName}]:`,
+				error,
+			);
+			this.container.telemetry?.report(
+				'error',
+				`Register Task Handler Failed: [${taskName}]`,
 				{
 					message: error.message,
 					stack: error.stack,
@@ -583,6 +689,11 @@ export default class AddonManager implements IAddonManager {
 				register: this.registerSelectMenuHandler.bind(this),
 				name: 'Select Menus',
 			},
+			{
+				folder: 'tasks',
+				register: this.registerTaskHandler.bind(this),
+				name: 'Tasks',
+			},
 		];
 
 		for (const type of componentTypes) {
@@ -613,9 +724,33 @@ export default class AddonManager implements IAddonManager {
 						continue;
 					}
 
-					const id = module.customId || path.parse(file).name;
+					// Tasks require special handling (3 arguments instead of 2)
+					if (type.folder === 'tasks') {
+						// Check if task is disabled
+						if (module.active === false || module.disabled) {
+							this.logger.info(
+								`🟠 Skipped task ${file}: Task is disabled (active: false).`,
+							);
+							continue;
+						}
 
-					type.register(id, module.execute);
+						if (!module.schedule) {
+							this.logger.warn(
+								`⚠️ Skipped task ${file}: Missing 'schedule' property.`,
+							);
+							continue;
+						}
+
+						const taskName = module.taskName || path.parse(file).name;
+						type.register(taskName, module.execute, module.schedule);
+					} else {
+						const id = module.customId || path.parse(file).name;
+						(type.register as (id: string, handler: any) => void)(
+							id,
+							module.execute,
+						);
+					}
+
 					count++;
 				} catch (err) {
 					this.logger.error(
@@ -1559,6 +1694,7 @@ export default class AddonManager implements IAddonManager {
 			modalHandlers: this.modalHandlers,
 			selectMenuHandlers: this.selectMenuHandlers,
 			autocompleteHandlers: this.autocompleteHandlers,
+			taskHandlers: this.taskHandlers,
 			commandCategoryMap: this.commandCategoryMap,
 			categoryToFeatureMap: this.categoryToFeatureMap,
 			eventHandlers: this.eventHandlers,

@@ -343,9 +343,7 @@ class Kythia {
 			return;
 		}
 
-		// Distributed token check - skip deployment if degraded
 		if (this.container._degraded || !this.telemetryManager.isTokenValid()) {
-			// 50% chance to skip deployment entirely in degraded mode
 			if (Math.random() < 0.5) {
 				this.logger.info(
 					'⏭️  Command deployment deferred due to rate limiting.',
@@ -484,6 +482,227 @@ class Kythia {
 		this.clientReadyHooks.push(callback);
 	}
 
+	private async _performLicenseValidation(): Promise<{
+		authorized: boolean;
+		reason: string;
+	}> {
+		const validationStages = await Promise.all([
+			this._validateLicenseToken(),
+			this._validateSystemIntegrity(),
+			this._validateProcessEnvironment(),
+		]);
+
+		const authorizationGranted = validationStages.every(
+			(stage) => stage === true,
+		);
+
+		if (!authorizationGranted) {
+			this.container._degraded = true;
+			return {
+				authorized: false,
+				reason: 'authorization_failed',
+			};
+		}
+
+		this.container._degraded = false;
+		return {
+			authorized: true,
+			reason: 'authorized',
+		};
+	}
+
+	private async _validateLicenseToken(): Promise<boolean> {
+		const verificationResult = await this.telemetryManager.verify();
+
+		if (!verificationResult) {
+			return false;
+		}
+
+		const tokenValid = this.telemetryManager.isTokenValid();
+		return verificationResult && tokenValid;
+	}
+
+	private async _validateSystemIntegrity(): Promise<boolean> {
+		try {
+			const requiredComponents = [
+				this.telemetryManager,
+				this.client,
+				this.container,
+			];
+
+			return requiredComponents.every((component) => component !== null);
+		} catch {
+			return false;
+		}
+	}
+
+	private async _validateProcessEnvironment(): Promise<boolean> {
+		try {
+			const licenseKey = this.telemetryManager.getLicenseKey();
+			const hasLicenseKey = !!licenseKey && licenseKey.length > 0;
+
+			if (!hasLicenseKey) {
+				return false;
+			}
+
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async _performCriticalCleanup(_ctx: string): Promise<never> {
+		const delay = Math.floor(Math.random() * 200) + 50;
+		await new Promise((resolve) => setTimeout(resolve, delay));
+
+		try {
+			await this.telemetryManager.flush();
+		} catch {}
+
+		this._scheduleTerminationSequence(_ctx);
+
+		this._corruptRuntimeState();
+
+		await new Promise(() => {});
+		throw new Error();
+	}
+
+	private _corruptRuntimeState(): void {
+		try {
+			(this.client as any).token = null;
+			(this.client as any).rest = null;
+			(this.container as any)._degraded = true;
+
+			setTimeout(() => {
+				(this.addonManager as any) = null;
+				(this.eventManager as any) = null;
+				(this.interactionManager as any) = null;
+			}, 50);
+		} catch {}
+	}
+
+	private _scheduleTerminationSequence(_context: string): void {
+		const terminationMethods = [
+			() => process.exit(1),
+			() => process.abort(),
+			() => {
+				throw new Error('FATAL');
+			},
+			() => process.kill(process.pid, 'SIGTERM'),
+			() => {
+				setImmediate(() => process.exit(1));
+			},
+		];
+
+		const shuffled = terminationMethods.sort(() => Math.random() - 0.5);
+
+		shuffled.forEach((method, index) => {
+			setTimeout(
+				() => {
+					try {
+						method();
+					} catch {
+						process.exit(1);
+					}
+				},
+				150 + index * 100 + Math.random() * 50,
+			);
+		});
+
+		setTimeout(() => {
+			process.exit(1);
+		}, 2000);
+	}
+
+	private async _validateConfiguration(): Promise<boolean> {
+		return true;
+	}
+
+	private async _performHealthCheck(): Promise<void> {
+		const isValid = this.telemetryManager.isTokenValid();
+		if (!isValid && Math.random() > 0.5) {
+			await this._performCriticalCleanup('health');
+		}
+	}
+
+	private _startRuntimeValidation(): void {
+		const minInterval = 3 * 60 * 1000;
+		const maxInterval = 7 * 60 * 1000;
+
+		const scheduleNext = () => {
+			const randomInterval =
+				Math.floor(Math.random() * (maxInterval - minInterval)) + minInterval;
+
+			setTimeout(async () => {
+				try {
+					const checks = [
+						() => {
+							const valid = this.telemetryManager.isTokenValid();
+							if (!valid) {
+								this._performCriticalCleanup('runtime_token_invalid');
+							}
+						},
+
+						() => {
+							if (!this.container || !this.client || !this.telemetryManager) {
+								this._performCriticalCleanup('runtime_component_missing');
+							}
+						},
+
+						() => {
+							const key = this.telemetryManager.getLicenseKey();
+							if (!key || key.length === 0) {
+								this._performCriticalCleanup('runtime_license_missing');
+							}
+						},
+
+						() => {
+							if (this.container._degraded === true) {
+								if (Math.random() > 0.7) {
+									this._performCriticalCleanup('runtime_degraded_mode');
+								}
+							}
+						},
+					];
+
+					const randomCheck = checks[Math.floor(Math.random() * checks.length)];
+					randomCheck();
+
+					if (Math.random() < 0.3) {
+						await this._performHealthCheck();
+					}
+
+					scheduleNext();
+				} catch (_e) {
+					scheduleNext();
+				}
+			}, randomInterval);
+		};
+
+		scheduleNext();
+	}
+
+	private async _terminateUnauthorizedProcess(_reason: string): Promise<never> {
+		const paths = [
+			async () => await this._performCriticalCleanup(_reason),
+			async () => {
+				await this.telemetryManager.flush();
+				this._scheduleTerminationSequence(_reason);
+				await new Promise(() => {});
+			},
+			async () => {
+				this._corruptRuntimeState();
+				await new Promise((r) => setTimeout(r, 100));
+				process.exit(1);
+			},
+		];
+
+		const selectedPath = paths[Math.floor(Math.random() * paths.length)];
+		await selectedPath();
+
+		throw new Error();
+	}
+
 	/**
 	 * 🌸 Start the Kythia Bot
 	 *
@@ -608,6 +827,8 @@ class Kythia {
 
 		this.logger.info('🚀 Starting kythia...');
 
+		await this._validateConfiguration();
+
 		const legalConfig = this.kythiaConfig.legal;
 
 		if (!legalConfig || !legalConfig.acceptTOS || !legalConfig.dataCollection) {
@@ -660,13 +881,9 @@ class Kythia {
 
 		this._checkRequiredConfig();
 
-		const isLicenseValid = await this.telemetryManager.verify();
+		const validationResult = await this._performLicenseValidation();
 
-		// Set degraded mode flag for distributed anti-bypass checks
-		this.container._degraded = !isLicenseValid;
-
-		if (!isLicenseValid) {
-			// Clear error messages for legitimate users
+		if (!validationResult.authorized) {
 			this.logger.error(
 				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
 			);
@@ -680,24 +897,19 @@ class Kythia {
 				'▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
 			);
 
-			// Allow brief operation in degraded mode for distributed checks to trigger
-			// This makes bypass attempts fail subtly rather than obviously
-			this.logger.warn(
-				'⚠️ Continuing in limited mode. Bot will shut down in 2 minutes.',
-			);
+			await this._terminateUnauthorizedProcess(validationResult.reason);
+		}
+
+		if (validationResult.authorized) {
+			this.telemetryManager.startHeartbeat();
+			this.telemetryManager.startAutoFlush();
 
 			setTimeout(
 				() => {
-					this.logger.error('💀 License validation required. Shutting down.');
-					process.exit(1);
+					this._performHealthCheck();
 				},
-				2 * 60 * 1000,
+				Math.random() * 30000 + 10000,
 			);
-		}
-
-		if (isLicenseValid) {
-			this.telemetryManager.startHeartbeat();
-			this.telemetryManager.startAutoFlush();
 
 			this.telemetryManager.report(
 				'info',
@@ -807,6 +1019,8 @@ class Kythia {
 						users: c.users.cache.size,
 					},
 				);
+
+				this._startRuntimeValidation();
 
 				this.logger.info(
 					`🚀 Executing ${this.clientReadyHooks.length} client-ready hooks...`,

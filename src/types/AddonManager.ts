@@ -46,6 +46,10 @@ export type KythiaAutocompleteHandler = (
 	container: KythiaContainer,
 ) => Promise<void> | void;
 
+export type KythiaTaskHandler = (
+	container: KythiaContainer,
+) => Promise<void> | void;
+
 export type KythiaEventHandler = KythiaAugmentedEventHandler;
 export type KythiaCommandInteraction =
 	| ChatInputCommandInteraction
@@ -101,6 +105,7 @@ export interface IAddonManager {
 	modalHandlers: Map<string, KythiaModalHandler>;
 	selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
 	autocompleteHandlers: Map<string, KythiaAutocompleteHandler>;
+	taskHandlers: Map<string, KythiaTaskHandler>;
 
 	commandCategoryMap: Map<string, string>;
 	categoryToFeatureMap: Map<string, string>;
@@ -121,6 +126,11 @@ export interface IAddonManager {
 		commandName: string,
 		handler: KythiaAutocompleteHandler,
 	): void;
+	registerTaskHandler(
+		taskName: string,
+		handler: KythiaTaskHandler,
+		schedule: string | number,
+	): void;
 
 	registerCommand(
 		module: KythiaCommandModule,
@@ -140,6 +150,7 @@ export interface IAddonManager {
 		modalHandlers: Map<string, KythiaModalHandler>;
 		selectMenuHandlers: Map<string, KythiaSelectMenuHandler>;
 		autocompleteHandlers: Map<string, KythiaAutocompleteHandler>;
+		taskHandlers: Map<string, KythiaTaskHandler>;
 		commandCategoryMap: Map<string, string>;
 		categoryToFeatureMap: Map<string, string>;
 		eventHandlers: Map<string, KythiaEventHandler[]>;
