@@ -67,7 +67,12 @@ class KythiaStorage implements IKythiaStorage {
 		const [results] = await this.sequelize.query(
 			`SELECT name FROM ${this.tableName} ORDER BY id ASC`,
 		);
-		return (results as any[]).map((r: any) => r.name);
+
+		interface MigrationRecord {
+			name: string;
+		}
+
+		return (results as MigrationRecord[]).map((r) => r.name);
 	}
 
 	async logMigration({ name }: { name: string }): Promise<void> {
@@ -102,7 +107,12 @@ class KythiaStorage implements IKythiaStorage {
 				type: QueryTypes.SELECT,
 			},
 		);
-		return result ? (result as any).max_batch || 0 : 0;
+
+		interface BatchResult {
+			max_batch: number | null;
+		}
+
+		return result ? (result as BatchResult).max_batch || 0 : 0;
 	}
 
 	async getLastBatchMigrations(): Promise<string[]> {
@@ -118,7 +128,11 @@ class KythiaStorage implements IKythiaStorage {
 			},
 		);
 
-		return (migrations as any[]).map((m) => m.name);
+		interface MigrationRecord {
+			name: string;
+		}
+
+		return (migrations as MigrationRecord[]).map((m) => m.name);
 	}
 }
 

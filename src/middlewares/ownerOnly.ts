@@ -1,12 +1,16 @@
 import { MessageFlags, type Interaction } from 'discord.js';
-import type { KythiaMiddleware, KythiaContainer } from '../types';
+import type {
+	KythiaMiddleware,
+	KythiaContainer,
+	KythiaCommandModule,
+} from '../types';
 
 const ownerOnly: KythiaMiddleware = {
 	name: 'ownerOnly',
 	priority: 1,
 	async execute(
 		interaction: Interaction,
-		command: any,
+		command: KythiaCommandModule,
 		container: KythiaContainer,
 	): Promise<boolean> {
 		if (!command.ownerOnly) return true;

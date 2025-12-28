@@ -13,7 +13,7 @@ export default function loadDiscordHelpers({
 	kythiaConfig,
 }: DiscordHelperDependencies): DiscordHelpers {
 	function isOwner(userId: string): boolean {
-		let ownerIds: any = kythiaConfig?.owner.ids;
+		let ownerIds: string | string[] | undefined = kythiaConfig?.owner.ids;
 
 		if (typeof ownerIds === 'string') {
 			ownerIds = ownerIds.split(',').map((id) => id.trim());

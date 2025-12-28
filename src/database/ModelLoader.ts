@@ -48,8 +48,11 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 				logger.info(`🟠 Skipping models for disabled addon: ${addon}`);
 				continue;
 			}
-		} catch (e: any) {
-			logger.warn(`Failed to check config for addon ${addon}: ${e.message}`);
+		} catch (e: unknown) {
+			const error = e instanceof Error ? e : new Error(String(e));
+			logger.warn(
+				`Failed to check config for addon ${addon}: ${error.message}`,
+			);
 		}
 
 		const modelsDir = path.join(addonsDir, addon, 'database', 'models');

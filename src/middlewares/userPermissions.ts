@@ -3,7 +3,11 @@ import {
 	type Interaction,
 	type PermissionsString,
 } from 'discord.js';
-import type { KythiaMiddleware, KythiaContainer } from '../types';
+import type {
+	KythiaMiddleware,
+	KythiaContainer,
+	KythiaCommandModule,
+} from '../types';
 
 const formatPerms = (permsArray: string[]): string =>
 	permsArray.map((perm) => perm.replace(/([A-Z])/g, ' $1').trim()).join(', ');
@@ -13,7 +17,7 @@ const userPermissions: KythiaMiddleware = {
 	priority: 5,
 	async execute(
 		interaction: Interaction,
-		command: any,
+		command: KythiaCommandModule,
 		container: KythiaContainer,
 	): Promise<boolean> {
 		if (!command.permissions || !interaction.inGuild()) return true;

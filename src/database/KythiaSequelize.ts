@@ -113,8 +113,9 @@ const createSequelizeInstance: CreateSequelizeInstance = (
 						typeof dbDialectOptions === 'string'
 							? JSON.parse(dbDialectOptions)
 							: dbDialectOptions;
-				} catch (e: any) {
-					logger.error('Error parsing dialect options:', e.message);
+				} catch (error: unknown) {
+					logger.error('❌ Query failed:', error);
+					throw error;
 				}
 			}
 			break;

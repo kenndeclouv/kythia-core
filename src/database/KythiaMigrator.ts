@@ -18,7 +18,7 @@
  */
 
 import KythiaStorage = require('./KythiaStorage');
-import { DataTypes } from 'sequelize';
+import { DataTypes, type QueryInterface } from 'sequelize';
 import { Umzug } from 'umzug';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -85,30 +85,32 @@ const KythiaMigrator: KythiaMigratorFunction = async ({
 	}
 
 	const umzugLogger = {
-		info: (event: any) => {
-			if (typeof event === 'object') {
-				if (event.event === 'migrating') {
-				} else if (event.event === 'migrated') {
-					logger.info(`✅ Migrated: ${event.name}`);
+		info: (event: unknown) => {
+			if (typeof event === 'object' && event !== null) {
+				const evt = event as Record<string, unknown>;
+				if (evt.event === 'migrating') {
+					// Silently skip migrating logs
+				} else if (evt.event === 'migrated') {
+					logger.info(`✅ Migrated: ${evt.name}`);
 				}
 			} else {
-				logger.info(event);
+				logger.info(String(event));
 			}
 		},
-		warn: (msg: any) => logger.warn(msg),
-		error: (msg: any) => logger.error(msg),
-		debug: (msg: any) => logger.debug(msg),
+		warn: (msg: unknown) => logger.warn(msg),
+		error: (msg: unknown) => logger.error(msg),
+		debug: (msg: unknown) => logger.debug(msg),
 	};
 
 	const umzug = new Umzug({
 		migrations: migrations.map((m) => ({
 			name: m.name,
 			path: m.path,
-			up: async ({ context }: { context: any }) => {
+			up: async ({ context }: { context: QueryInterface }) => {
 				const migration = require(m.path);
 				return migration.up(context, DataTypes);
 			},
-			down: async ({ context }: { context: any }) => {
+			down: async ({ context }: { context: QueryInterface }) => {
 				const migration = require(m.path);
 				return migration.down(context, DataTypes);
 			},

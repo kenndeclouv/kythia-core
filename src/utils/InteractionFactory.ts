@@ -18,7 +18,7 @@
  * -  Context Abstraction: Decoupling command logic from specific Discord.js structures.
  */
 
-import type { KythiaCommandModule } from '@src/types';
+import type { KythiaCommandModule, KythiaContainer } from '@src/types';
 
 import type {
 	Message,
@@ -43,7 +43,7 @@ export const InteractionFactory = {
 
 			const client = message.client as Client & {
 				commands: Map<string, KythiaCommandModule>;
-				container?: any;
+				container?: KythiaContainer;
 			};
 
 			const targetCommand = client.commands?.get(commandName);
@@ -380,21 +380,19 @@ export const InteractionFactory = {
 			);
 
 			return interaction;
-		} catch (error: any) {
-			const client = message.client as any;
-			client.container?.logger?.error(
-				'Error creating mock interaction:',
-				error,
-			);
+		} catch (error: unknown) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			const client = message.client as Client & { container?: any };
+			client.container?.logger?.error('Error creating mock interaction:', err);
 			client.container?.telemetry?.report(
 				'error',
 				`Mock Interaction Creation Failed: [${commandName}]`,
 				{
-					message: error.message,
-					stack: error.stack,
+					message: err.message,
+					stack: err.stack,
 				},
 			);
-			throw error;
+			throw err;
 		}
 	},
 };

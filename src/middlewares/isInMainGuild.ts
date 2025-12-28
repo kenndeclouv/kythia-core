@@ -9,15 +9,20 @@ import {
 	SeparatorSpacingSize,
 	type Interaction,
 } from 'discord.js';
-import type { KythiaMiddleware, KythiaContainer } from '../types';
+import type {
+	KythiaMiddleware,
+	KythiaContainer,
+	KythiaCommandModule,
+} from '../types';
 import { convertColor } from '../utils/color';
 
 const isInMainGuild: KythiaMiddleware = {
 	name: 'isInMainGuild',
-	priority: 10,
+	priority: 7,
+
 	async execute(
 		interaction: Interaction,
-		command: any,
+		command: KythiaCommandModule,
 		container: KythiaContainer,
 	): Promise<boolean> {
 		if (!command.isInMainGuild) return true;

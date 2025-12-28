@@ -27,23 +27,23 @@ import fs from 'node:fs';
 
 import clc from 'cli-color';
 
-import type { KythiaLogger } from '../types';
+import type { KythiaConfig, KythiaLogger } from '../types';
 
 const logDir = 'logs';
 
 const configPath = path.resolve(process.cwd(), 'kythia.config.js');
 
-let kythiaConfig: any;
+let kythiaConfig: KythiaConfig;
 try {
 	if (fs.existsSync(configPath)) {
-		kythiaConfig = require(configPath);
+		kythiaConfig = require(configPath) as KythiaConfig;
 	} else {
-		kythiaConfig = { env: 'development', settings: {} };
+		kythiaConfig = { env: 'development' } as KythiaConfig;
 	}
-} catch (e) {
+} catch (error: unknown) {
 	console.warn('⚠️ Logger could not load kythia.config.js');
-	console.warn(e);
-	kythiaConfig = { env: 'development', settings: {} };
+	console.warn(error);
+	kythiaConfig = { env: 'development' } as KythiaConfig;
 }
 
 if (!fs.existsSync(logDir)) {
