@@ -4,7 +4,7 @@
  * @file src/cli/commands/LangCheckCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.7-beta
+ * @version 0.12.8-beta
  *
  * @description
  * Performs a deep AST analysis of the codebase to find `t()` translation function calls.

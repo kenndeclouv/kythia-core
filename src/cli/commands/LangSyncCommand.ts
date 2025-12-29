@@ -3,7 +3,7 @@
  *
  * @file src/cli/commands/LangSyncCommand.ts
  * @copyright © 2025 kenndeclouv
- * @version 0.12.7-beta
+ * @version 0.12.8-beta
  *
  * @description
  * Scans codebase for t() calls using robust AST analysis (matching LangCheck).

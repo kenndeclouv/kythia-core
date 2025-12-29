@@ -4,7 +4,7 @@
  * @file src/managers/AddonManager.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.7-beta
+ * @version 0.12.8-beta
  *
  * @description
  * Handles all addon loading, command registration, and component management.

@@ -4,7 +4,7 @@
  * @file src/cli/commands/CacheClearCommand.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.7-beta
+ * @version 0.12.8-beta
  *
  * @description
  * Interactive utility to flush Redis cache. Supports intelligent handling of
