@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.8-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.7-beta...v0.12.8-beta) (2025-12-29)
+
+
+### ✨ Added
+
+* Enhance type safety across database, utilities, and middleware components by replacing `any` with specific types and refining error handling. ([359b1af](https://github.com/kenndeclouv/kythia-core/commit/359b1afa0027ce15461b9d59d92b06a8f752995f))
+* Implement dependency-aware addon loading with topological sorting and add new architecture and reference documentation. ([39bc8ce](https://github.com/kenndeclouv/kythia-core/commit/39bc8ce96c633a7a46214854e29e39c28f2668f3))
+* Introduce task scheduling and bolster license validation with comprehensive integrity and runtime checks. ([4549ff8](https://github.com/kenndeclouv/kythia-core/commit/4549ff882a4f43de8c2128ab48b589162d7a3014))
+
+
+### 🔧 Changed
+
+* refine error handling to explicitly cast unknown errors and enhance type definitions for Sequelize models and module loaders ([68ea306](https://github.com/kenndeclouv/kythia-core/commit/68ea306286590af478a567875d3c28fd420b2964))
+
 ### [0.12.7-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.6-beta...v0.12.7-beta) (2025-12-26)
 
 
