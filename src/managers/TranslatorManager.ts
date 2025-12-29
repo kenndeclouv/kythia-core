@@ -88,15 +88,14 @@ export default class TranslatorManager {
 						this.locales.set(langCode, newData);
 						this.logger.info(`🌐 Loaded New Language: ${langCode}`);
 					}
-				} catch (err: any) {
-					this.logger.error(
-						`Error loading language file ${file} from ${dirPath}:`,
-						err,
-					);
+				} catch (err: unknown) {
+					const error = err instanceof Error ? err : new Error(String(err));
+					this.logger.error(`Failed to load language file ${file}:`, error);
 				}
 			}
-		} catch (error: any) {
-			this.logger.error(`Failed to read locale directory [${dirPath}]:`, error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Failed to load translations:', error);
 		}
 	}
 
@@ -163,8 +162,9 @@ export default class TranslatorManager {
 			}
 
 			return translation;
-		} catch (error: any) {
-			this.logger.error(`Translation failed for key [${key}]:`, error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Translation error:', error);
 			this.container.telemetry?.report(
 				'error',
 				`Translation Failed: [${key}]`,

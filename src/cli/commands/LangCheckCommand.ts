@@ -180,7 +180,8 @@ export default class LangCheckCommand extends Command {
 					return false;
 				}
 				return true;
-			} catch (error: any) {
+			} catch (err: unknown) {
+				const error = err instanceof Error ? err : new Error(String(err));
 				console.error(
 					'\x1b[31m%s\x1b[0m',
 					`❌ Failed to load files: ${error.message}`,
@@ -388,8 +389,9 @@ export default class LangCheckCommand extends Command {
 		if (defaultLocale) {
 			try {
 				getAllKeys(defaultLocale, allDefinedKeys);
-			} catch (e) {
-				console.error('Error collecting defined keys:', e);
+			} catch (error: unknown) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error('Error collecting defined keys:', err.message);
 			}
 
 			const unusedKeys = [];
@@ -504,7 +506,9 @@ export default class LangCheckCommand extends Command {
 								);
 								fixedFilesCount++;
 							}
-						} catch (err: any) {
+						} catch (error: unknown) {
+							const err =
+								error instanceof Error ? error : new Error(String(error));
 							console.error(
 								`  > \x1b[31mFailed to fix\x1b[0m ${path.relative(PROJECT_ROOT, file)}: ${err.message}`,
 							);
@@ -546,7 +550,9 @@ export default class LangCheckCommand extends Command {
 					try {
 						fs.unlinkSync(file);
 						deletedCount++;
-					} catch (err: any) {
+					} catch (error: unknown) {
+						const err =
+							error instanceof Error ? error : new Error(String(error));
 						console.error(
 							`  > \x1b[31mFailed to delete\x1b[0m ${path.relative(PROJECT_ROOT, file)}: ${err.message}`,
 						);

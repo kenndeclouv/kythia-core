@@ -200,8 +200,9 @@ Output:
 					);
 
 					return translatedBatch;
-				} catch (e: any) {
-					const errorMessage = e.message || '';
+				} catch (e: unknown) {
+					const error = e instanceof Error ? e : new Error(String(e));
+					const errorMessage = error.message || '';
 					console.error(
 						pc.red(`❌ Error in batch (Attempt ${attempt})...`),
 						errorMessage,

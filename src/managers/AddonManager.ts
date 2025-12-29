@@ -246,8 +246,9 @@ export default class AddonManager implements IAddonManager {
 					async () => {
 						try {
 							await handler(this.container);
-						} catch (error: any) {
-							this.logger.error(`Error in task [${taskName}]:`, error);
+						} catch (err: unknown) {
+							const error = err instanceof Error ? err : new Error(String(err));
+							this.logger.error(`Failed to start task ${taskName}:`, error);
 							this.container.telemetry?.report(
 								'error',
 								`Task Execution Failed: [${taskName}]`,
@@ -272,8 +273,9 @@ export default class AddonManager implements IAddonManager {
 				taskRef = setInterval(async () => {
 					try {
 						await handler(this.container);
-					} catch (error: any) {
-						this.logger.error(`Error in task [${taskName}]:`, error);
+					} catch (err: unknown) {
+						const error = err instanceof Error ? err : new Error(String(err));
+						this.logger.error(`Task ${taskName} error:`, error); // Changed taskRef.name to taskName as taskRef is NodeJS.Timeout
 						this.container.telemetry?.report(
 							'error',
 							`Task Execution Failed: [${taskName}]`,
@@ -439,12 +441,14 @@ export default class AddonManager implements IAddonManager {
 	private _instantiateBaseCommand(CommandClass: any): any {
 		try {
 			return new CommandClass(this.container);
-		} catch (error: any) {
-			this.logger.error(`Failed to instantiate BaseCommand class:`, error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Failed to instantiate BaseCommand class:', error); // Adjusted message to fit context
 			this.container.telemetry?.report(
 				'error',
 				'Instantiate BaseCommand Failed',
 				{
+					// Adjusted telemetry message
 					message: error.message,
 					stack: error.stack,
 				},
@@ -567,14 +571,15 @@ export default class AddonManager implements IAddonManager {
 				name: commandName,
 				folder: category,
 			};
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error(
 				`Failed to register command from [${filePath}]:`,
 				error,
-			);
+			); // Kept filePath as addonName is not defined here
 			this.container.telemetry?.report(
 				'error',
-				`Register Command Failed: [${filePath}]`,
+				`Register Command Failed: [${filePath}]`, // Kept filePath as addonName is not defined here
 				{
 					message: error.message,
 					stack: error.stack,
@@ -701,9 +706,12 @@ export default class AddonManager implements IAddonManager {
 					try {
 						const addonJsonRaw = fs.readFileSync(addonJsonPath, 'utf8');
 						addonJson = JSON.parse(addonJsonRaw);
-					} catch (jsonErr: any) {
+					} catch (jsonErr: unknown) {
+						const error =
+							jsonErr instanceof Error ? jsonErr : new Error(String(jsonErr));
 						this.logger.warn(
-							`🔴 Failed to parse addon.json for ${addon.name}: ${jsonErr.message}`,
+							`🔴 Failed to parse addon.json for ${addon.name}:`,
+							error,
 						);
 						continue;
 					}
@@ -723,9 +731,11 @@ export default class AddonManager implements IAddonManager {
 					);
 					continue;
 				}
-			} catch (e: any) {
-				this.logger.warn(
-					`🔴 Error reading addon.json for ${addonDir}: ${e.message}`,
+			} catch (e: unknown) {
+				const error = e instanceof Error ? e : new Error(String(e));
+				this.logger.error(
+					`🔴 Error reading addon.json for ${addonDir}:`,
+					error,
 				);
 				continue;
 			}
@@ -744,9 +754,11 @@ export default class AddonManager implements IAddonManager {
 					);
 					continue;
 				}
-			} catch (e: any) {
+			} catch (e: unknown) {
+				const error = e instanceof Error ? e : new Error(String(e));
 				this.logger.warn(
-					`🔴 Error checking config for addon ${addon.name.toUpperCase()}: ${e.message}`,
+					`🔴 Error checking config for addon ${addon.name.toUpperCase()}:`,
+					error,
 				);
 			}
 
@@ -759,9 +771,11 @@ export default class AddonManager implements IAddonManager {
 					this.logger.info(
 						`  └─> Found and loaded permission defaults for addon '${addon.name.toUpperCase()}'`,
 					);
-				} catch (e: any) {
+				} catch (e: unknown) {
+					const error = e instanceof Error ? e : new Error(String(e));
 					this.logger.warn(
-						`  └─> Failed to load permissions.js for addon '${addon.name.toUpperCase()}': ${e.message}`,
+						`  └─> Failed to load permissions.js for addon '${addon.name.toUpperCase()}':`,
+						error,
 					);
 				}
 			}
@@ -836,7 +850,8 @@ export default class AddonManager implements IAddonManager {
 							this.eventHandlers.get(eventName)?.push(eventHandler);
 							loadedEventsSummary.push(eventName);
 						}
-					} catch (error) {
+					} catch (e: unknown) {
+						const error = e instanceof Error ? e : new Error(String(e));
 						this.logger.error(
 							`❌ Failed to register event [${eventName}] for [${addon.name}]:`,
 							error,
@@ -1433,9 +1448,11 @@ export default class AddonManager implements IAddonManager {
 							builder.setDescriptionLocalizations(descriptionLocalizations);
 						}
 						this._applySubcommandLocalizations(builder, name, allLocales);
-					} catch (e: any) {
+					} catch (e: unknown) {
+						const error = e instanceof Error ? e : new Error(String(e));
 						this.logger.warn(
-							`Failed to load localizations for command "${name}": ${e.message}`,
+							`Failed to load localizations for command "${name}":`,
+							error,
 						);
 					}
 
@@ -1562,9 +1579,10 @@ export default class AddonManager implements IAddonManager {
 								builder.setDescriptionLocalizations(descriptionLocalizations);
 							}
 							this._applySubcommandLocalizations(builder, name, allLocales);
-						} catch (e: any) {
+						} catch (e: unknown) {
+							const error = e instanceof Error ? e : new Error(String(e));
 							this.logger.warn(
-								`Failed to load localizations for command "${name}": ${e.message}`,
+								`Failed to load localizations for command "${name}": ${error.message}`,
 							);
 						}
 						this.commandCategoryMap.set(name, item.name);

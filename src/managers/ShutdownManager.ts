@@ -63,9 +63,9 @@ export class ShutdownManager implements IShutdownManager {
 			const originalClearInterval = global.clearInterval;
 
 			(global as any).setInterval = (
-				callback: (...args: any[]) => void,
+				callback: (...args: unknown[]) => void,
 				ms?: number,
-				...args: any[]
+				...args: unknown[]
 			): NodeJS.Timeout => {
 				const intervalId = originalSetInterval(callback, ms, ...args);
 
@@ -85,7 +85,8 @@ export class ShutdownManager implements IShutdownManager {
 			this.logger.info(
 				'✅ Global setInterval/clearInterval has been patched for tracking.',
 			);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to initialize global interval tracker:', error);
 			this.container.telemetry?.report(
 				'error',
@@ -130,7 +131,7 @@ export class ShutdownManager implements IShutdownManager {
 
 				DiscordMessage.prototype.createMessageComponentCollector = function (
 					this: Message,
-					...args: any[]
+					...args: unknown[]
 				) {
 					const collector = origCreateCollector.apply(this, args);
 
@@ -210,7 +211,8 @@ export class ShutdownManager implements IShutdownManager {
 				};
 
 				exitHook(cleanupAndFlush);
-				process.on('unhandledRejection', (error: any) => {
+				process.on('unhandledRejection', (err: unknown) => {
+					const error = err instanceof Error ? err : new Error(String(err));
 					this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
 					this.container.telemetry?.report(
 						'error',
@@ -221,7 +223,8 @@ export class ShutdownManager implements IShutdownManager {
 						},
 					);
 				});
-				process.on('uncaughtException', (error: any) => {
+				process.on('uncaughtException', (err: unknown) => {
+					const error = err instanceof Error ? err : new Error(String(err));
 					this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
 					this.container.telemetry?.report('error', 'Uncaught Exception', {
 						message: error.message,
@@ -235,8 +238,13 @@ export class ShutdownManager implements IShutdownManager {
 					'🛡️  Graceful shutdown and error handlers are now active.',
 				);
 			}
-		} catch (error: any) {
-			this.logger.error('Failed to initialize shutdown collectors:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			if (this.logger) {
+				this.logger.error('❌ Error during shutdown:', error);
+			} else {
+				console.error('❌ Error during shutdown:', error);
+			}
 			this.container.telemetry?.report(
 				'error',
 				'Shutdown Collector Initialization Failed',

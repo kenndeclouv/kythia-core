@@ -13,7 +13,7 @@ interface TelemetryOptions {
 interface LogQueueItem {
 	level: string;
 	message: string;
-	metadata?: any;
+	metadata?: Record<string, unknown> | string | null;
 	timestamp: number;
 }
 
@@ -72,7 +72,8 @@ export class TelemetryManager {
 				nodeVersion: process.version,
 				botVersion: this.version,
 			};
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to get system specs:', error);
 
 			return {
@@ -112,7 +113,13 @@ export class TelemetryManager {
 			} else {
 				return 'INVALID';
 			}
-		} catch (error: any) {
+		} catch (err: unknown) {
+			// Axios errors have response/request properties
+			const error = err as {
+				response?: { status: number };
+				request?: unknown;
+				message?: string;
+			};
 			if (error.response) {
 				if (error.response.status === 401 || error.response.status === 403) {
 					this.logger.error(
@@ -257,7 +264,7 @@ export class TelemetryManager {
 	public report(
 		level: 'info' | 'warn' | 'error',
 		message: string,
-		metadata?: any,
+		metadata?: Record<string, unknown>,
 	) {
 		try {
 			this.logQueue.push({
@@ -286,9 +293,9 @@ export class TelemetryManager {
 				key: this.licenseKey,
 				logs: logsToSend,
 			});
-		} catch (error) {
+		} catch (error: unknown) {
 			this.logger.warn(
-				`⚠️ Failed to flush telemetry logs: ${(error as any).message}`,
+				`⚠️ Failed to flush telemetry logs: ${(error as Error).message}`,
 			);
 		}
 	}
@@ -301,8 +308,9 @@ export class TelemetryManager {
 				},
 				5 * 60 * 1000,
 			);
-		} catch (error: any) {
-			this.logger.error('Failed to start auto flush:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Failed to track interaction:', error);
 			this.report('error', 'Auto Flush Start Failed', {
 				message: error.message,
 				stack: error.stack,
@@ -347,7 +355,8 @@ export class TelemetryManager {
 							await this._s0('verification_timeout');
 						}
 					}
-				} catch (error: any) {
+				} catch (err: unknown) {
+					const error = err instanceof Error ? err : new Error(String(err));
 					this.logger.error('Error during heartbeat check:', error);
 					this.report('error', 'Heartbeat Check Failed', {
 						message: error.message,
@@ -355,7 +364,8 @@ export class TelemetryManager {
 					});
 				}
 			}, randomMs);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to start heartbeat:', error);
 			this.report('error', 'Heartbeat Start Failed', {
 				message: error.message,

@@ -9,8 +9,8 @@ export default abstract class Command {
 	public abstract description: string;
 
 	public abstract handle(
-		options: Record<string, any>,
-		...args: any[]
+		options: Record<string, unknown>,
+		...args: unknown[]
 	): Promise<void>;
 
 	public register(program: CommanderCommand): void {
@@ -18,12 +18,9 @@ export default abstract class Command {
 
 		this.configure(cmd);
 
-		cmd.action((...args: any[]) => {
-			args.pop();
-
-			const options = args.pop() || {};
-
-			this.handle(options, ...args);
+		cmd.action((...args: unknown[]) => {
+			const options = args[args.length - 1] as Record<string, unknown>;
+			void this.handle(options, ...args.slice(0, -1));
 		});
 	}
 

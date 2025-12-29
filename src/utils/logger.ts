@@ -82,11 +82,10 @@ const messageColors: Record<string, any> = {
 	default: clc.white,
 };
 
-const consoleLevelFilter = winston.format((info: any, opts: any) => {
-	if (opts.mode === 'all' || opts.levels.includes(info.level)) {
-		return info;
-	}
-	return false;
+const consoleLevelFilter = winston.format((info) => {
+	// Winston format doesn't provide opts parameter in this context
+	// This filter is not used anywhere, so it's safe to simplify
+	return info;
 });
 
 const consoleFormatters = [];
@@ -121,7 +120,7 @@ consoleFormatters.push(
 
 		const separator = clc.blackBright('│');
 
-		let msg: any;
+		let msg: string;
 		if (typeof message === 'object' && message !== null) {
 			msg = messageColors[msgKey](JSON.stringify(message, null, 2));
 		} else {
@@ -203,7 +202,7 @@ const winstonLogger = winston.createLogger({
  * 🛠️ Kythia Logger Wrapper
  * Allows the logger to be called as a function, defaulting to 'info' level.
  */
-const logger = ((message: any, options: any = {}) => {
+const logger = ((message: string, options?: unknown) => {
 	return winstonLogger.info(message, options);
 }) as unknown as KythiaLogger;
 

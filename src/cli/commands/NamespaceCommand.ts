@@ -94,7 +94,7 @@ export default class NamespaceCommand extends Command {
 			const content = fs.readFileSync(filePath, 'utf8');
 			const headerRegex = /\/\*\*[\s\S]*?namespace:[\s\S]*?\*\//;
 
-			let newContent: any;
+			let newContent: string;
 			if (headerRegex.test(content)) {
 				newContent = content.replace(headerRegex, newHeader.trim());
 			} else {

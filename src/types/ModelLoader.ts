@@ -1,13 +1,18 @@
-import type { Sequelize } from 'sequelize';
-import type { KythiaContainer } from './KythiaContainer';
-import type { KythiaLogger } from './KythiaLogger';
+import type { Sequelize, Model, ModelStatic } from 'sequelize';
+import type { KythiaContainer } from './index';
+import type { KythiaLogger } from './Winston';
 
 export interface KythiaInstanceForLoader {
 	container: KythiaContainer;
 	logger: KythiaLogger;
 }
 
+export type AnySequelizeModel = ModelStatic<Model>;
+
 export type BootModels = (
-	kythiaInstance: KythiaInstanceForLoader,
+	kythiaInstance: {
+		container: KythiaContainer;
+		logger: KythiaLogger;
+	},
 	sequelize: Sequelize,
 ) => Promise<void>;

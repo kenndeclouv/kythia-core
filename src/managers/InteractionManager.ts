@@ -154,7 +154,8 @@ export class InteractionManager implements IInteractionManager {
 					) {
 						await this._handleContextMenuCommand(interaction);
 					}
-				} catch (error: any) {
+				} catch (err: unknown) {
+					const error = err instanceof Error ? err : new Error(String(err));
 					await this._handleInteractionError(interaction, error);
 					this.container.telemetry?.report(
 						'error',
@@ -261,8 +262,9 @@ export class InteractionManager implements IInteractionManager {
 				});
 				return;
 			}
-		} catch (error: any) {
-			this.logger.error('Error handling chat input command:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Error handling slash command:', error);
 			this.container.telemetry?.report(
 				'error',
 				`Chat Input Command Failed: [${interaction.commandName}]`,
@@ -303,7 +305,8 @@ export class InteractionManager implements IInteractionManager {
 					this.logger.error(e);
 				}
 			}
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Error handling autocomplete:', error);
 			this.container.telemetry?.report(
 				'error',
@@ -344,8 +347,9 @@ export class InteractionManager implements IInteractionManager {
 					);
 				}
 			}
-		} catch (error: any) {
-			this.logger.error('Error handling button interaction:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Error handling button:', error);
 			this.container.telemetry?.report(
 				'error',
 				`Button Interaction Failed: [${interaction.customId}]`,
@@ -393,8 +397,9 @@ export class InteractionManager implements IInteractionManager {
 					);
 				}
 			}
-		} catch (error: any) {
-			this.logger.error('Error handling modal submit:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Error handling modal:', error);
 			this.container.telemetry?.report(
 				'error',
 				`Modal Submit Failed: [${interaction.customId}]`,
@@ -442,7 +447,8 @@ export class InteractionManager implements IInteractionManager {
 					);
 				}
 			}
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Error handling select menu:', error);
 			this.container.telemetry?.report(
 				'error',
@@ -484,8 +490,9 @@ export class InteractionManager implements IInteractionManager {
 			if (typeof command.execute === 'function') {
 				await command.execute(interaction, this.container);
 			}
-		} catch (error: any) {
-			this.logger.error('Error handling context menu command:', error);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.logger.error('Error handling context menu:', error);
 			this.container.telemetry?.report(
 				'error',
 				`Context Menu Command Failed: [${interaction.commandName}]`,

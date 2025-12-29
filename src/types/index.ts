@@ -12,3 +12,12 @@ export * from './ShutdownManager';
 
 export * from './KythiaLogger';
 export * from './DiscordHelpers';
+
+// Phase 2: Enhanced type definitions
+export * from './Sequelize';
+export * from './ModuleLoaders';
+export type {
+	WinstonLogInfo,
+	WinstonFormatOptions,
+	LogMetadata,
+} from './Winston';

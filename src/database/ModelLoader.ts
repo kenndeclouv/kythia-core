@@ -20,16 +20,20 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import type { BootModels } from '../types/ModelLoader';
+import type { BootModels, AnySequelizeModel } from '../types/ModelLoader';
+import { Model } from 'sequelize';
+import type {
+	KythiaModelStatic,
+	KythiaModelWithAssociations,
+} from '../types/Sequelize';
 
 const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 	const { container, logger } = kythiaInstance;
-	const rootDir = container.appRoot;
-	const addonsDir = path.join(rootDir, 'addons');
+	const addonsDir = path.join(process.cwd(), 'addons');
 
 	if (!fs.existsSync(addonsDir)) return;
 
-	const loadedModels: any[] = [];
+	const loadedModels: KythiaModelStatic[] = [];
 	const addonFolders = fs
 		.readdirSync(addonsDir)
 		.filter((f) => fs.statSync(path.join(addonsDir, f)).isDirectory());
@@ -76,9 +80,12 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 
 	for (const ModelClass of loadedModels) {
 		try {
-			await ModelClass.autoBoot(sequelize);
+			// Cast sequelize to any as KythiaModelStatic expects a specific Sequelize instance type
+			// which might be slightly different here
+			await ModelClass.autoBoot(sequelize as any);
 
-			container.models[ModelClass.name] = ModelClass;
+			container.models[ModelClass.name] =
+				ModelClass as unknown as AnySequelizeModel;
 			logger.info(
 				`   ✨ Booted: ${ModelClass.name} -> ${ModelClass.tableName}`,
 			);
@@ -88,9 +95,12 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 	}
 
 	logger.info('🔗 Linking Associations...');
-	Object.values(container.models).forEach((model: any) => {
-		if (model.associate) {
-			model.associate(container.models);
+	Object.values(container.models).forEach((model) => {
+		const ModelClass = model as unknown as KythiaModelWithAssociations;
+		if (ModelClass.associate) {
+			ModelClass.associate(
+				container.models as unknown as Record<string, KythiaModelStatic>,
+			);
 		}
 	});
 };

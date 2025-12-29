@@ -80,8 +80,9 @@ export default class UpversionCommand extends Command {
 					console.log(pc.green(`✅ Updated: ${path.relative(rootDir, file)}`));
 					updatedCount++;
 				}
-			} catch (err: any) {
-				console.error(pc.red(`❌ Failed to process: ${file}`), err.message);
+			} catch (err: unknown) {
+				const error = err instanceof Error ? err : new Error(String(err));
+				console.error(pc.red(`❌ Failed to process: ${file}`), error.message);
 			}
 		});
 

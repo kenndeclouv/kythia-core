@@ -127,8 +127,9 @@ export default class CacheClearCommand extends Command {
 				console.log(pc.green(`✅ FLUSHALL Success: ${masked}`));
 
 				redis.quit();
-			} catch (err: any) {
-				console.error(pc.red(`❌ Failed to flush ${masked}: ${err.message}`));
+			} catch (err: unknown) {
+				const error = err instanceof Error ? err : new Error(String(err));
+				console.error(pc.red('❌ Failed to flush cache:'), error.message);
 			}
 		}
 

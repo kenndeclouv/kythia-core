@@ -51,7 +51,8 @@ export default class EventManager implements IEventManager {
 							if (stopPropagation === true) {
 								break;
 							}
-						} catch (error: any) {
+						} catch (err: unknown) {
+							const error = err instanceof Error ? err : new Error(String(err));
 							this.logger.error(
 								`Error executing event handler for [${eventName}]:`,
 								error,
@@ -73,7 +74,8 @@ export default class EventManager implements IEventManager {
 			this.logger.info(
 				`✅ EventManager initialized with ${this.eventHandlers.size} event types`,
 			);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to initialize EventManager:', error);
 			this.container.telemetry?.report(
 				'error',
@@ -95,7 +97,8 @@ export default class EventManager implements IEventManager {
 				this.eventHandlers.set(eventName, []);
 			}
 			this.eventHandlers.get(eventName)?.push(handler);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error(
 				`Failed to add event handler for [${eventName}]:`,
 				error,
@@ -125,7 +128,8 @@ export default class EventManager implements IEventManager {
 					handlers.splice(index, 1);
 				}
 			}
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error(
 				`Failed to remove event handler for [${eventName}]:`,
 				error,
@@ -144,7 +148,8 @@ export default class EventManager implements IEventManager {
 	public getEventHandlers(eventName: string): KythiaAugmentedEventHandler[] {
 		try {
 			return this.eventHandlers.get(eventName) || [];
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error(
 				`Failed to get event handlers for [${eventName}]:`,
 				error,
@@ -164,7 +169,8 @@ export default class EventManager implements IEventManager {
 	public getEventTypes(): string[] {
 		try {
 			return Array.from(this.eventHandlers.keys());
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to get event types:', error);
 			this.container.telemetry?.report('error', 'Get Event Types Failed', {
 				message: error.message,

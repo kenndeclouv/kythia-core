@@ -59,7 +59,8 @@ export default class MiddlewareManager implements IMiddlewareManager {
 			this.logger.info(
 				`🛡️  Total Loaded: ${this.middlewares.length} middlewares.`,
 			);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error('Failed to load middlewares:', error);
 			this.container.telemetry?.report('error', 'Middleware Loading Failed', {
 				message: error.message,
@@ -93,14 +94,15 @@ export default class MiddlewareManager implements IMiddlewareManager {
 
 					this.middlewares.push(mw as KythiaMiddleware);
 					loadedCount++;
-				} catch (err: any) {
-					this.logger.error(`❌ Failed to load middleware ${file}:`, err);
+				} catch (err: unknown) {
+					const error = err instanceof Error ? err : new Error(String(err));
+					this.logger.error(`❌ Failed to load middleware ${file}:`, error);
 					this.container.telemetry?.report(
 						'error',
 						`Middleware Load Failed: [${file}]`,
 						{
-							message: err.message,
-							stack: err.stack,
+							message: error.message,
+							stack: error.stack,
 							source,
 						},
 					);
@@ -108,7 +110,8 @@ export default class MiddlewareManager implements IMiddlewareManager {
 			}
 
 			this.logger.info(`🛡️  Loaded ${loadedCount} middlewares from ${source}`);
-		} catch (error: any) {
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
 			this.logger.error(
 				`Failed to read middleware directory [${dirPath}]:`,
 				error,
@@ -137,14 +140,15 @@ export default class MiddlewareManager implements IMiddlewareManager {
 					this.container,
 				);
 				if (!shouldContinue) return false;
-			} catch (err: any) {
-				this.logger.error(`❌ Error in middleware ${middleware.name}:`, err);
+			} catch (err: unknown) {
+				const error = err instanceof Error ? err : new Error(String(err));
+				this.logger.error(`❌ Error in middleware ${middleware.name}:`, error);
 				this.container.telemetry?.report(
 					'error',
 					`Middleware Execution Failed: [${middleware.name}]`,
 					{
-						message: err.message,
-						stack: err.stack,
+						message: error.message,
+						stack: error.stack,
 						command: command.name,
 					},
 				);

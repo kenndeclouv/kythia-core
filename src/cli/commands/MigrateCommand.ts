@@ -95,23 +95,23 @@ export default class MigrateCommand extends Command {
 
 						await adminSequelize
 							.query(`CREATE DATABASE \`${dbName}\``)
-							.catch(async (e: any) => {
+							.catch(async (error: unknown) => {
 								if (currentDialect === 'postgres') {
 									await adminSequelize.query(`CREATE DATABASE "${dbName}"`);
 								} else {
-									throw e;
+									throw error;
 								}
 							});
 
 						await adminSequelize.close();
 						console.log(pc.green(`✅ Database "${dbName}" created.`));
 						needReauth = true;
-					} catch (createErr: any) {
-						console.error(
-							pc.bgRed(' ERROR '),
-							pc.red('Failed to create database:'),
-							createErr.message,
-						);
+					} catch (createErr: unknown) {
+						const error =
+							createErr instanceof Error
+								? createErr
+								: new Error(String(createErr));
+						console.error(pc.red('❌ Failed to create table:'), error.message);
 						process.exit(1);
 					}
 				} else {
@@ -127,11 +127,12 @@ export default class MigrateCommand extends Command {
 		if (needReauth) {
 			try {
 				await sequelize.authenticate();
-			} catch (e: any) {
+			} catch (e: unknown) {
+				const error = e instanceof Error ? e : new Error(String(e));
 				console.error(
 					pc.bgRed(' ERROR '),
 					pc.red('Failed to connect after creating database:'),
-					e.message,
+					error.message,
 				);
 				process.exit(1);
 			}
@@ -168,9 +169,10 @@ export default class MigrateCommand extends Command {
 					await queryInterface.dropTable('SequelizeMeta').catch(() => {});
 
 					console.log(pc.green('✅ All tables dropped. Database is clean.'));
-				} catch (e: any) {
-					console.error(pc.red(`❌ Failed to drop tables: ${e.message}`));
-					throw e;
+				} catch (err: unknown) {
+					const error = err instanceof Error ? err : new Error(String(err));
+					console.error(pc.red(`❌ Failed to drop tables: ${error.message}`));
+					throw error;
 				} finally {
 					if (
 						sequelize.getDialect() === 'mysql' ||
@@ -255,9 +257,13 @@ export default class MigrateCommand extends Command {
 			console.log(
 				pc.green(`✅ Batch #${newBatch} completed (${executed.length} files).`),
 			);
-		} catch (err: any) {
-			console.error(pc.bgRed(' ERROR '), pc.red(err.message));
-
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			console.error(
+				pc.bgRed(' ERROR '),
+				pc.red('❌ Migration failed:'),
+				error.message,
+			);
 			process.exit(1);
 		} finally {
 			await sequelize.close();
