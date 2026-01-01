@@ -12,13 +12,25 @@
  */
 
 import exitHook from 'async-exit-hook';
-import type { Message } from 'discord.js';
+import {
+	type Message,
+	MessageFlags,
+	ContainerBuilder,
+	TextDisplayBuilder,
+	SeparatorBuilder,
+	SeparatorSpacingSize,
+	SectionBuilder,
+	ThumbnailBuilder,
+} from 'discord.js';
 import type {
 	KythiaClient,
 	KythiaContainer,
 	IShutdownManager,
 	KythiaLogger,
 } from '../types';
+import fs from 'node:fs';
+import path from 'node:path';
+import pkg from '../../package.json';
 
 export class ShutdownManager implements IShutdownManager {
 	client: KythiaClient;
@@ -52,6 +64,151 @@ export class ShutdownManager implements IShutdownManager {
 	 * 🕵️‍♂️ [GLOBAL PATCH] Overrides global interval functions to track all active intervals.
 	 * This allows for a truly generic and scalable graceful shutdown of all timed tasks.
 	 */
+	private _logHistory(
+		type: 'STARTUP' | 'SHUTDOWN' | 'CRASH',
+		reason: string,
+		error?: Error,
+	) {
+		try {
+			const logFile = path.join(process.cwd(), 'logs', 'shutdown_history.log');
+			const timestamp = new Date()
+				.toISOString()
+				.replace('T', ' ')
+				.split('.')[0];
+
+			const uptimeSeconds = process.uptime();
+			const days = Math.floor(uptimeSeconds / (3600 * 24));
+			const hours = Math.floor((uptimeSeconds % (3600 * 24)) / 3600);
+			const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+			const seconds = Math.floor(uptimeSeconds % 60);
+			const uptimeStr = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+
+			const mem = process.memoryUsage();
+			const heapUsed = (mem.heapUsed / 1024 / 1024).toFixed(2);
+			const rss = (mem.rss / 1024 / 1024).toFixed(2);
+
+			let logEntry = `[${timestamp}] ${type === 'STARTUP' ? '🟢' : '🔴'} ${type}\n`;
+			logEntry += `----------------------------------------\n`;
+			logEntry += `Reason:  ${reason}\n`;
+
+			if (type !== 'STARTUP') {
+				logEntry += `Uptime:  ${uptimeStr}\n`;
+			}
+
+			logEntry += `Memory:  Heap: ${heapUsed}MB / RSS: ${rss}MB\n`;
+
+			if (error) {
+				logEntry += `Error:   ${error.message}\n`;
+				logEntry += `Stack Trace:\n${error.stack}\n`;
+			}
+
+			logEntry += `----------------------------------------\n\n`;
+
+			fs.appendFileSync(logFile, logEntry);
+		} catch (err) {
+			console.error('Failed to write to shutdown history log:', err);
+		}
+	}
+
+	/**
+	 * 📨 Sends a professional V2 webhook for Lifecycle Events (Crash/Shutdown)
+	 */
+	private async _sendLifecycleWebhook(
+		reason: string,
+		type: 'CRASH' | 'SHUTDOWN',
+		error?: Error,
+	) {
+		const webhookUrl =
+			this.container.kythiaConfig.api?.webhookErrorLogs ||
+			(this.container.kythiaConfig.settings?.webhookErrorLogs === true
+				? process.env.WEBHOOK_ERROR_LOGS
+				: undefined);
+
+		if (!webhookUrl) {
+			this.logger.warn(
+				'⚠️ Lifecycle Webhook skipped: No URL configured in api.webhookErrorLogs or env.WEBHOOK_ERROR_LOGS',
+			);
+			return;
+		}
+
+		const url = new URL(webhookUrl);
+		url.searchParams.append('wait', 'true');
+		url.searchParams.append('with_components', 'true');
+
+		try {
+			const accentColor = type === 'CRASH' ? 0xff0000 : 0xffa500;
+			const title =
+				type === 'CRASH'
+					? `❌ Critical System Crash: ${reason}`
+					: `🛑 System Shutdown: ${reason}`;
+
+			const description = error
+				? `${error.message}\n\`\`\`ts\n${
+						error.stack ? error.stack.slice(0, 800) : 'No Stack Trace'
+					}\n\`\`\``
+				: 'Graceful shutdown initiated.';
+
+			const lifecycleContainer = new ContainerBuilder()
+				.setAccentColor(accentColor)
+				.addSectionComponents(
+					new SectionBuilder()
+						.addTextDisplayComponents(
+							new TextDisplayBuilder().setContent(
+								`## ${title}\n${description}`,
+							),
+						)
+						.setThumbnailAccessory(
+							new ThumbnailBuilder()
+								.setURL(
+									this.container.client.user?.displayAvatarURL() ||
+										this.container.kythiaConfig.settings?.aboutBannerImage ||
+										'https://cdn.discordapp.com/embed/avatars/0.png',
+								)
+								.setDescription('System Status'),
+						),
+				)
+				.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				)
+				.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						`-# Core Version: ${pkg.version} | Uptime: ${Math.floor(
+							process.uptime(),
+						)}s`,
+					),
+				);
+
+			const payload = {
+				flags: MessageFlags.IsComponentsV2,
+				components: [lifecycleContainer.toJSON()],
+			};
+
+			this.logger.debug(`Webhook Payload: ${JSON.stringify(payload)}`);
+
+			const response = await fetch(url.href, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+
+			if (!response.ok) {
+				const errorBody = await response.text();
+				this.logger.error(
+					`❌ Lifecycle Webhook Failed: [${response.status}] ${response.statusText}\nResponse: ${errorBody}`,
+				);
+			} else {
+				this.logger.info('✅ Lifecycle Webhook sent successfully.');
+			}
+		} catch (webhookErr) {
+			this.logger.error(
+				'❌ Failed to construct/send Lifecycle Webhook:',
+				webhookErr,
+			);
+		}
+	}
+
 	/**
 	 * 🕵️‍♂️ [GLOBAL PATCH] Overrides global interval functions
 	 */
@@ -133,6 +290,18 @@ export class ShutdownManager implements IShutdownManager {
 					this: Message,
 					...args: unknown[]
 				) {
+					let options = args[0] as any;
+					if (!options) options = {};
+
+					if (!options.time && !options.idle) {
+						options.time = 15 * 60 * 1000;
+						botInstance.logger.warn(
+							`⚠️ Unsafe Collector Detected! No timeout specified. Auto-applying 15m safety limit.\n` +
+								`   Channel: ${this.channelId} | Author: ${this.author.id}`,
+						);
+					}
+					args[0] = options;
+
 					const collector = origCreateCollector.apply(this, args);
 
 					if (botInstance._messagesWithActiveCollectors) {
@@ -156,6 +325,11 @@ export class ShutdownManager implements IShutdownManager {
 			if (!this._cleanupAttached) {
 				const cleanupAndFlush = async (callback: () => void) => {
 					this.logger.info('🛑 Graceful shutdown initiated...');
+					this._logHistory('SHUTDOWN', 'Graceful Exit (SIGINT/SIGTERM)');
+					await this._sendLifecycleWebhook(
+						'Graceful Exit (SIGINT/SIGTERM)',
+						'SHUTDOWN',
+					);
 
 					if (this._activeIntervals && this._activeIntervals.size > 0) {
 						this.logger.info(
@@ -214,6 +388,12 @@ export class ShutdownManager implements IShutdownManager {
 				process.on('unhandledRejection', (err: unknown) => {
 					const error = err instanceof Error ? err : new Error(String(err));
 					this.logger.error('‼️ UNHANDLED PROMISE REJECTION:', error);
+					this._logHistory('CRASH', 'Unhandled Promise Rejection', error);
+					this._sendLifecycleWebhook(
+						'Unhandled Promise Rejection',
+						'CRASH',
+						error,
+					);
 					this.container.telemetry?.report(
 						'error',
 						'Unhandled Promise Rejection',
@@ -226,6 +406,8 @@ export class ShutdownManager implements IShutdownManager {
 				process.on('uncaughtException', (err: unknown) => {
 					const error = err instanceof Error ? err : new Error(String(err));
 					this.logger.error('‼️ UNCAUGHT EXCEPTION! Bot will shutdown.', error);
+					this._logHistory('CRASH', 'Uncaught Exception', error);
+					this._sendLifecycleWebhook('Uncaught Exception', 'CRASH', error);
 					this.container.telemetry?.report('error', 'Uncaught Exception', {
 						message: error.message,
 						stack: error.stack,
@@ -262,6 +444,7 @@ export class ShutdownManager implements IShutdownManager {
 	initialize(): void {
 		this.initializeGlobalIntervalTracker();
 		this.initializeShutdownCollectors();
+		this._logHistory('STARTUP', 'Bot Initialized');
 	}
 
 	/**

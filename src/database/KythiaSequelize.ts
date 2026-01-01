@@ -49,17 +49,16 @@ const createSequelizeInstance: CreateSequelizeInstance = (
 	const dbName = dbConfig.name;
 	const dbUser = dbConfig.user || process.env.DB_USER;
 
-	const dbPassword =
-		(dbConfig as any).password || dbConfig.pass || process.env.DB_PASSWORD;
+	const dbPassword = dbConfig.pass || process.env.DB_PASSWORD;
 	const dbHost = dbConfig.host || process.env.DB_HOST;
 	const dbPort =
 		(dbConfig.port ? Number(dbConfig.port) : undefined) ||
 		(process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined);
 
-	const dbSocket = (dbConfig as any).socketPath || process.env.DB_SOCKET_PATH;
-	const dbSsl = (dbConfig as any).ssl || process.env.DB_SSL;
+	const dbSocket = dbConfig.socketPath || process.env.DB_SOCKET_PATH;
+	const dbSsl = dbConfig.ssl || process.env.DB_SSL;
 	const dbDialectOptions =
-		(dbConfig as any).dialectOptions || process.env.DB_DIALECT_OPTIONS;
+		dbConfig.dialectOptions || process.env.DB_DIALECT_OPTIONS;
 
 	const seqConfig: Options = {
 		database: dbName,
@@ -73,10 +72,16 @@ const createSequelizeInstance: CreateSequelizeInstance = (
 			charset: 'utf8mb4',
 			collate: 'utf8mb4_unicode_ci',
 		},
+		pool: {
+			max: dbConfig.pool?.max || 10,
+			min: dbConfig.pool?.min || 0,
+			acquire: dbConfig.pool?.acquire || 30000,
+			idle: dbConfig.pool?.idle || 10000,
+		},
 	};
 
 	if (dialect !== 'sqlite') {
-		seqConfig.timezone = (dbConfig as any).timezone || '+00:00';
+		seqConfig.timezone = dbConfig.timezone || '+00:00';
 	}
 
 	switch (dialect) {

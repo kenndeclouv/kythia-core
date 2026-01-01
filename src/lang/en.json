@@ -1,7 +1,7 @@
 {
 	"common": {
 		"error": {
-			"generic": "❌ | An error occurred while executing this command. Please try again later.",
+			"generic": "## ❌ Command Error\nAn error occurred while executing this command. Please try again later or contact the owner.",
 			"not": {
 				"owner": "❌ | You are not my owner!",
 				"team": "❌ | You are kythia's team",

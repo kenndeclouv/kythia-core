@@ -37,6 +37,7 @@ This README provides a quick overview and getting started guide. For comprehensi
 - **[CLASS_REFERENCE.md](./CLASS_REFERENCE.md)** - Full class and method documentation
 - **[DEV_GUIDE.md](./DEV_GUIDE.md)** - Development guide, best practices, and patterns
 - **[CLI_REFERENCE.md](./CLI_REFERENCE.md)** - CLI tools and commands reference
+- **[METRICS.md](./METRICS.md)** - Performance metrics and monitoring guide
 
 ---
 

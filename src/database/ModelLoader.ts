@@ -82,6 +82,9 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 		try {
 			// Cast sequelize to any as KythiaModelStatic expects a specific Sequelize instance type
 			// which might be slightly different here
+			if (container.metrics) {
+				(ModelClass as any).metrics = container.metrics;
+			}
 			await ModelClass.autoBoot(sequelize as any);
 
 			container.models[ModelClass.name] =

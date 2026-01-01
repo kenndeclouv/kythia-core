@@ -89,6 +89,7 @@ import KythiaClient from './KythiaClient';
 import type { Sequelize } from 'sequelize';
 import type Redis from 'ioredis';
 import { TelemetryManager } from './managers/TelemetryManager';
+import { MetricsManager } from './managers/MetricsManager';
 
 class Kythia {
 	public kythiaConfig: IKythiaConfig;
@@ -111,6 +112,7 @@ class Kythia {
 	public shutdownManager!: IShutdownManager;
 	public translator!: ITranslatorManager;
 	public telemetryManager!: TelemetryManager;
+	public metricsManager!: MetricsManager;
 
 	/**
 	 * 🏗️ Kythia Constructor
@@ -183,6 +185,10 @@ class Kythia {
 			config: this.kythiaConfig,
 		});
 
+		this.metricsManager = new MetricsManager({
+			logger: this.logger,
+		});
+
 		this.container = {
 			client: this.client,
 			sequelize: this.sequelize,
@@ -194,6 +200,7 @@ class Kythia {
 			helpers: this.helpers,
 			appRoot: this.appRoot,
 			telemetry: this.telemetryManager,
+			metrics: this.metricsManager,
 
 			t: async (_interaction: Interaction, key: string) => key,
 			models: this.models,
@@ -352,7 +359,7 @@ class Kythia {
 			}
 		}
 		try {
-			const { slash, user, message } = this._getCommandCounts(commands);
+			const { total, slash, user, message } = this._getCommandCounts(commands);
 			const clientId = this.kythiaConfig.bot.clientId;
 			const devGuildId = this.kythiaConfig.bot.devGuildId;
 			const mainGuildId = this.kythiaConfig.bot.mainGuildId;
@@ -420,7 +427,7 @@ class Kythia {
 				}
 			}
 
-			this.logger.info(`⭕ All Slash Commands: ${commands.length}`);
+			this.logger.info(`⭕ All Slash Commands: ${total}`);
 			this.logger.info(`⭕ Top Level Slash Commands: ${slash}`);
 			this.logger.info(`⭕ User Context Menu: ${user}`);
 			this.logger.info(`⭕ Message Context Menu: ${message}`);
@@ -439,30 +446,71 @@ class Kythia {
 	private _getCommandCounts(
 		commandJsonArray: RESTPostAPIApplicationCommandsJSONBody[],
 	) {
-		const counts = { slash: 0, user: 0, message: 0 };
+		let slash = 0;
+		let user = 0;
+		let message = 0;
+		let total = 0;
+
+		const processedCommands = new Set();
 
 		if (!Array.isArray(commandJsonArray)) {
 			this.logger.warn(
 				'commandJsonArray is not iterable. Returning zero counts.',
 			);
-			return counts;
+			return { total, slash, user, message };
 		}
 
-		for (const cmd of commandJsonArray) {
+		for (const cmd of commandJsonArray as any[]) {
+			// Count types
 			switch (cmd?.type) {
 				case 1:
 				case undefined:
-					counts.slash++;
+					slash++;
 					break;
 				case 2:
-					counts.user++;
+					user++;
 					break;
 				case 3:
-					counts.message++;
+					message++;
 					break;
 			}
+
+			// Calculate Total (Recursively) like Help Command
+			const uniqueKey = `slash-${cmd.name}`;
+			if (processedCommands.has(uniqueKey)) continue;
+			processedCommands.add(uniqueKey);
+
+			if (Array.isArray(cmd.options) && cmd.options.length > 0) {
+				const subcommands = cmd.options.filter(
+					(opt: any) => opt.type === 1 || opt.type === 2, // Subcommand or SubcommandGroup
+				);
+
+				if (subcommands.length > 0) {
+					subcommands.forEach((sub: any) => {
+						if (sub.type === 2) {
+							// SubcommandGroup
+							total += sub.options?.length || 0;
+						} else {
+							total += 1;
+						}
+					});
+					continue;
+				}
+			}
+
+			// If not a subcommand container, count as 1
+			total += 1;
+
+			// Handle context menus if attached (though ideally they are separate in this array)
+			// The original logic separates them, counting them here anyway if part of same structure
+			if (cmd.type === 2 || cmd.type === 3) {
+				// Don't double count if disjoint, but typically REST body separates them.
+				// For safety, let's treat contexts as +1 if not already covered.
+				// In this loop, cmd IS the context menu item if type is 2 or 3.
+				// processedCommands check ensures we don't duplicate.
+			}
 		}
-		return counts;
+		return { total, slash, user, message };
 	}
 
 	/**

@@ -324,6 +324,21 @@ await interaction.reply(await t(interaction, 'welcome_message', { user: interact
 
 ---
 
+#### MetricsManager
+
+**File:** `src/managers/MetricsManager.ts`
+
+Handles collection of performance metrics using `prom-client`.
+
+**Responsibilities:**
+- Track command execution totals and latency
+- Track cache hit/miss rates
+- Process CPU/Memory usage monitoring
+
+See [METRICS.md](./METRICS.md) for details.
+
+---
+
 ## Database Layer
 
 ### KythiaModel

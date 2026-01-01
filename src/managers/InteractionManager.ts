@@ -24,6 +24,8 @@ import {
 	ContainerBuilder,
 	TextDisplayBuilder,
 	SeparatorSpacingSize,
+	SectionBuilder,
+	ThumbnailBuilder,
 	type Interaction,
 	type ChatInputCommandInteraction,
 	type AutocompleteInteraction,
@@ -241,10 +243,28 @@ export class InteractionManager implements IInteractionManager {
 					},
 				);
 
-				if (command.execute.length === 2) {
-					await command.execute(interaction, this.container);
-				} else {
-					await command.execute(interaction);
+				const endTimer = this.container.metrics?.commandDuration.startTimer({
+					command_name: commandKey,
+				});
+
+				try {
+					if (command.execute.length === 2) {
+						await command.execute(interaction, this.container);
+					} else {
+						await command.execute(interaction);
+					}
+					this.container.metrics?.commandsTotal.inc({
+						command_name: commandKey,
+						status: 'success',
+					});
+				} catch (err) {
+					this.container.metrics?.commandsTotal.inc({
+						command_name: commandKey,
+						status: 'error',
+					});
+					throw err;
+				} finally {
+					if (endTimer) endTimer();
 				}
 
 				await this._checkRestartSchedule(interaction);
@@ -642,31 +662,63 @@ export class InteractionManager implements IInteractionManager {
 			},
 		);
 
-		try {
-			if (
-				this.kythiaConfig.api?.webhookErrorLogs &&
-				this.kythiaConfig.settings &&
-				this.kythiaConfig.settings.webhookErrorLogs === true
-			) {
-				const webhookClient = new WebhookClient({
-					url: this.kythiaConfig.api.webhookErrorLogs,
-				});
-				const errorEmbed = new EmbedBuilder()
-					.setColor('Red')
-					.setDescription(
-						`## ❌ Error at ${interaction.user.tag}\n` +
-							`\`\`\`${error.stack}\`\`\``,
-					)
-					.setFooter({
-						text: interaction.guild
-							? `Error from server ${interaction.guild.name}`
-							: 'Error from DM',
-					})
-					.setTimestamp();
-				await webhookClient.send({ embeds: [errorEmbed] });
-			}
-		} catch (webhookErr) {
-			this.logger.error('Error sending interaction error webhook:', webhookErr);
+		if (
+			this.kythiaConfig.api?.webhookErrorLogs &&
+			this.kythiaConfig.settings &&
+			this.kythiaConfig.settings.webhookErrorLogs === true
+		) {
+			const webhookUrl = this.kythiaConfig.api.webhookErrorLogs;
+			const accentColor = 0xff0000;
+
+			// Prepare URL with required V2 params
+			const url = new URL(webhookUrl);
+			url.searchParams.append('wait', 'true');
+			url.searchParams.append('with_components', 'true');
+
+			const user = interaction.user;
+			const container = new ContainerBuilder()
+				.setAccentColor(accentColor)
+				.addSectionComponents(
+					new SectionBuilder()
+						.addTextDisplayComponents(
+							new TextDisplayBuilder().setContent(
+								`## ❌ Interaction Error\n**User:** ${user.tag} (${user.id})\n**Guild:** ${
+									interaction.guild ? interaction.guild.name : 'DM'
+								}\n\`\`\`ts\n${
+									error.stack ? error.stack.slice(0, 800) : error.message
+								}\n\`\`\``,
+							),
+						)
+						.setThumbnailAccessory(
+							new ThumbnailBuilder()
+								.setDescription(user.username)
+								.setURL(user.displayAvatarURL()),
+						),
+				)
+				.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
+				)
+				.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						`-# Command: ${(interaction as any).commandName || 'Unknown'}`,
+					),
+				);
+
+			const payload = {
+				flags: MessageFlags.IsComponentsV2,
+				components: [container.toJSON()],
+			};
+
+			await fetch(url.href, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
 		}
+	}
+	catch(webhookErr: any) {
+		this.logger.error('Error sending interaction error webhook:', webhookErr);
 	}
 }

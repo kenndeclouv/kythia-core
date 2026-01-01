@@ -41,10 +41,17 @@ export interface KythiaConfigDb {
 	pass?: string;
 	storagePath?: string;
 	socketPath?: string;
+	pool?: {
+		max?: number;
+		min?: number;
+		acquire?: number;
+		idle?: number;
+	};
 	dialectOptions?: Record<string, unknown>;
 	timezone: string;
 	redis?: KythiaRedisConfig;
 	redisCacheVersion: string;
+	ssl?: boolean;
 	useRedis?: boolean;
 }
 

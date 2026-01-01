@@ -39,6 +39,7 @@ import type {
 	KythiaModelStructure,
 } from '../types/KythiaModel';
 import type { KythiaLogger } from '@src/types';
+import type { MetricsManager } from '@src/managers/MetricsManager';
 import clc = require('cli-color');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
@@ -78,6 +79,7 @@ export class KythiaModel<
 	static isRedisConnected = false;
 	static logger: KythiaLogger;
 	static config: KythiaConfig | {} = {};
+	static metrics: MetricsManager | undefined;
 	static CACHE_VERSION = '1.0.0';
 
 	static localCache = new LRUCache<string, { data: any; expires: number }>({
@@ -888,13 +890,23 @@ export class KythiaModel<
 			typeof cacheKeyOrQuery === 'string'
 				? cacheKeyOrQuery
 				: this.getCacheKey(cacheKeyOrQuery);
+
+		let result: CacheEntry = { hit: false, data: undefined };
+
 		if (this.isRedisConnected) {
-			return this._redisGetCachedEntry(cacheKey, includeOptions);
+			result = await this._redisGetCachedEntry(cacheKey, includeOptions);
 		} else if (!this.isShardMode) {
-			return this._mapGetCachedEntry(cacheKey, includeOptions);
+			result = await this._mapGetCachedEntry(cacheKey, includeOptions);
 		}
 
-		return { hit: false, data: undefined };
+		if (this.metrics) {
+			this.metrics.cacheOpsTotal.inc({
+				type: result.hit ? 'hit' : 'miss',
+				model: this.name,
+			});
+		}
+
+		return result;
 	}
 
 	/**
