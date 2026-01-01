@@ -3,7 +3,8 @@
  *
  * @file src/database/SeederManager.ts
  * @copyright © 2025 kenndeclouv
- * @assistant antigravity
+ * @assistant graa & chaa
+ * @version 0.12.9-beta
  *
  * @description
  * Discovers and executes seeders from 'addons' directories.

@@ -3,8 +3,9 @@
  *
  * @file src/cli/commands/SeedCommand.ts
  * @copyright © 2025 kenndeclouv
- * @assistant antigravity
- *
+ * @assistant graa & chaa
+ * @version 0.12.9-beta
+ * 
  * @description
  * Executed the database seeders.
  */

@@ -4,7 +4,7 @@
  * @file src/Kythia.ts
  * @copyright © 2025 kenndeclouv
  * @assistant graa & chaa
- * @version 0.12.8-beta
+ * @version 0.12.9-beta
  *
  * @description
  * WHAT IS KYTHIA?

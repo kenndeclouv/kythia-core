@@ -3,7 +3,8 @@
  *
  * @file src/database/Seeder.ts
  * @copyright © 2025 kenndeclouv
- * @assistant antigravity
+ * @assistant graa & chaa
+ * @version 0.12.9-beta
  *
  * @description
  * Abstract base class that all Seeders must extend.
