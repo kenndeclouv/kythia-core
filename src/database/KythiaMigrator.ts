@@ -17,7 +17,7 @@
  * -  Batch Integration: Uses KythiaStorage to support rollback by batch.
  */
 
-import KythiaStorage = require('./KythiaStorage');
+import KythiaStorage from './KythiaStorage';
 import { DataTypes, type QueryInterface } from 'sequelize';
 import { Umzug } from 'umzug';
 import path from 'node:path';
@@ -140,4 +140,4 @@ const KythiaMigrator: KythiaMigratorFunction = async ({
 	}
 };
 
-export = KythiaMigrator;
+export default KythiaMigrator;

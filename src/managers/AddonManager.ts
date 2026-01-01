@@ -351,20 +351,24 @@ export default class AddonManager implements IAddonManager {
 			priority: number;
 		}>,
 	): string[] {
+		// Graph: Dependency -> [Dependents]
+		// "A enables B, C"
 		const graph = new Map<string, string[]>();
 		const inDegree = new Map<string, number>();
 
-		// Build graph
+		// Initialize
 		for (const addon of addons) {
-			graph.set(addon.name, addon.dependencies || []);
 			inDegree.set(addon.name, 0);
+			if (!graph.has(addon.name)) graph.set(addon.name, []);
 		}
 
-		// Calculate in-degrees
-		for (const [_name, deps] of graph) {
-			for (const dep of deps) {
-				if (inDegree.has(dep)) {
-					inDegree.set(dep, (inDegree.get(dep) || 0) + 1);
+		// Build graph
+		// If "C" depends on "A", add edge A -> C, and increment in-degree of C
+		for (const addon of addons) {
+			for (const dep of addon.dependencies) {
+				if (graph.has(dep)) {
+					graph.get(dep)?.push(addon.name);
+					inDegree.set(addon.name, (inDegree.get(addon.name) || 0) + 1);
 				}
 			}
 		}
@@ -380,14 +384,15 @@ export default class AddonManager implements IAddonManager {
 		}
 
 		while (queue.length > 0) {
-			// Sort queue by priority before processing
+			// Sort queue by priority before processing (Higher priority first if same level)
+			// Note: Priority logic can be ambiguous here, usually priority sorts "roots".
 			queue.sort((a, b) => {
 				const addonA = addons.find((x) => x.name === a);
 				const addonB = addons.find((x) => x.name === b);
 				const priorityA = addonA?.priority ?? 50;
 				const priorityB = addonB?.priority ?? 50;
 				if (priorityA !== priorityB) {
-					return priorityA - priorityB;
+					return priorityA - priorityB; // Lower val = Higher priority (usually) or vice versa. Assuming Ascending.
 				}
 				return a.localeCompare(b);
 			});
@@ -396,12 +401,12 @@ export default class AddonManager implements IAddonManager {
 			if (!current) continue;
 			result.push(current);
 
-			const deps = graph.get(current) || [];
-			for (const dep of deps) {
-				const degree = (inDegree.get(dep) ?? 0) - 1;
-				inDegree.set(dep, degree);
+			const dependents = graph.get(current) || [];
+			for (const dependent of dependents) {
+				const degree = (inDegree.get(dependent) ?? 0) - 1;
+				inDegree.set(dependent, degree);
 				if (degree === 0) {
-					queue.push(dep);
+					queue.push(dependent);
 				}
 			}
 		}

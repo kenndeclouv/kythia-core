@@ -136,4 +136,4 @@ class KythiaStorage implements IKythiaStorage {
 	}
 }
 
-export = KythiaStorage;
+export default KythiaStorage;

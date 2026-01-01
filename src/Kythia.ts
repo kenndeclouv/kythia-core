@@ -1098,4 +1098,4 @@ class Kythia {
 	}
 }
 
-export = Kythia;
+export default Kythia;
