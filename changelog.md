@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.12.9-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.8-beta...v0.12.9-beta) (2026-01-01)
+
+
+### ✨ Added
+
+* Add command documentation generation and database seeding features. ([40a2449](https://github.com/kenndeclouv/kythia-core/commit/40a2449d75aa6b9917577513fea1eb82ede77ee1))
+* add footer and separator to error container and clean up imports. ([8e310be](https://github.com/kenndeclouv/kythia-core/commit/8e310befcf9c44eaf155dd55880136f73a4900a9))
+* Implement metrics collection for command usage and enhance command counting logic. ([02517d4](https://github.com/kenndeclouv/kythia-core/commit/02517d49ea5b3f1146a66eac76741cc5f9952f08))
+* Introduce Vitest for unit testing and add initial tests for managers and core components. ([0df6b45](https://github.com/kenndeclouv/kythia-core/commit/0df6b455d3353436747c0681514860ff0980a88f))
+
 ### [0.12.8-beta](https://github.com/kenndeclouv/kythia-core/compare/v0.12.7-beta...v0.12.8-beta) (2025-12-29)
 
 

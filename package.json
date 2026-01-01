@@ -1,6 +1,6 @@
 {
 	"name": "kythia-core",
-	"version": "0.12.8-beta",
+	"version": "0.12.9-beta",
 	"description": "Core library for the Kythia main Discord bot: extensible, modular, and scalable foundation for commands, components, and event management.",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -22,7 +22,7 @@
 		"test": "vitest run",
 		"test:ui": "vitest --ui",
 		"test:watch": "vitest",
-		"prepublishOnly": "npm run build:prod"
+		"prepublishOnly": "rm -rf dist && npm run build:prod"
 	},
 	"lint-staged": {
 		"*.{js,json}": [
