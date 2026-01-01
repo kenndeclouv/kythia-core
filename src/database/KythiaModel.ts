@@ -39,6 +39,7 @@ import type {
 	KythiaModelStructure,
 } from '../types/KythiaModel';
 import type { KythiaLogger } from '@src/types';
+import clc = require('cli-color');
 
 const NEGATIVE_CACHE_PLACEHOLDER = '__KYTHIA_NEGATIVE_CACHE__';
 const RECONNECT_DELAY_MINUTES = 3;
@@ -160,6 +161,54 @@ export class KythiaModel<
 		});
 
 		return model;
+	}
+
+	/**
+	 * 🔗 Intercepts hasOne to log association
+	 */
+	static hasOne(target: any, options?: any): any {
+		(this.logger || console).info(
+			`  └─ 🔗 ${clc.cyan(this.name.padEnd(15))} ${clc.yellow('──[ 1:1 ]──▶')} ${
+				target?.name || 'Unknown'
+			}`,
+		);
+		return super.hasOne(target, options);
+	}
+
+	/**
+	 * 🔗 Intercepts belongsTo to log association
+	 */
+	static belongsTo(target: any, options?: any): any {
+		(this.logger || console).info(
+			`  └─ 🔗 ${clc.cyan(this.name.padEnd(15))} ${clc.green('◀──[ 1:1 ]──')} ${
+				target?.name || 'Unknown'
+			}`,
+		);
+		return super.belongsTo(target, options);
+	}
+
+	/**
+	 * 🔗 Intercepts hasMany to log association
+	 */
+	static hasMany(target: any, options?: any): any {
+		(this.logger || console).info(
+			`  └─ 🔗 ${clc.cyan(this.name.padEnd(15))} ${clc.magenta('──[ 1:N ]──▶')} ${
+				target?.name || 'Unknown'
+			}`,
+		);
+		return super.hasMany(target, options);
+	}
+
+	/**
+	 * 🔗 Intercepts belongsToMany to log association
+	 */
+	static belongsToMany(target: any, options?: any): any {
+		(this.logger || console).info(
+			`  └─ 🔗 ${clc.cyan(this.name.padEnd(15))} ${clc.red('◀──[ N:M ]──▶')} ${
+				target?.name || 'Unknown'
+			}`,
+		);
+		return super.belongsToMany(target, options);
 	}
 
 	/**
@@ -1597,7 +1646,7 @@ export class KythiaModel<
 			const model = sequelizeInstance.models[modelName];
 			if (model.prototype instanceof KythiaModel) {
 				(model as any).client = client;
-				this.logger.info(`⚙️  Attaching hooks to ${model.name}`);
+				this.logger.info(`  └─ ⚙️  Attaching hooks to ${model.name}`);
 				(model as any).initializeCacheHooks();
 			}
 		}

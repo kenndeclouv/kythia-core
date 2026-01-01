@@ -49,7 +49,7 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 				configAddons.all?.active === false ||
 				configAddons[addon]?.active === false
 			) {
-				logger.info(`🟠 Skipping models for disabled addon: ${addon}`);
+				logger.info(`  └─ 🟠 Skipping models for disabled addon: ${addon}`);
 				continue;
 			}
 		} catch (e: unknown) {
@@ -87,7 +87,7 @@ const bootModels: BootModels = async (kythiaInstance, sequelize) => {
 			container.models[ModelClass.name] =
 				ModelClass as unknown as AnySequelizeModel;
 			logger.info(
-				`   ✨ Booted: ${ModelClass.name} -> ${ModelClass.tableName}`,
+				`  └─ ✨ Booted: ${ModelClass.name} -> ${ModelClass.tableName}`,
 			);
 		} catch (err) {
 			logger.error(`❌ AutoBoot Failed for ${ModelClass.name}:`, err);

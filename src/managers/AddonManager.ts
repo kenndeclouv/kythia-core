@@ -965,7 +965,7 @@ export default class AddonManager implements IAddonManager {
 			}
 
 			if (count > 0) {
-				summary.push(`   └─ ✅ Auto-loaded ${count} ${type.name}`);
+				summary.push(`  └─ ✅ Auto-loaded ${count} ${type.name}`);
 			}
 		}
 

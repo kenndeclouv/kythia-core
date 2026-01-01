@@ -183,6 +183,82 @@ module.exports = User;
 
 ---
 
+### db:seed
+
+Seed the database with records.
+
+#### Usage
+
+```bash
+npx kythia db:seed [options]
+```
+
+#### Options
+
+- `--class <string>` - Run a specific seeder class
+- `--addon <string>` - Run seeders only from this addon
+
+#### Examples
+
+**Run all seeders:**
+```bash
+npx kythia db:seed
+```
+
+**Run specific seeder:**
+```bash
+npx kythia db:seed --class UserSeeder
+```
+
+**Run seeders from specific addon:**
+```bash
+npx kythia db:seed --addon core
+```
+
+---
+
+### make:seeder
+
+Create a new seeder file.
+
+#### Usage
+
+```bash
+npx kythia make:seeder <name> --addon <addon>
+```
+
+#### Options
+
+- `--addon <string>` - Target addon name (required)
+
+#### Example
+
+```bash
+npx kythia make:seeder UserSeeder --addon core
+```
+
+#### Output
+
+Creates file: `addons/core/database/seeders/UserSeeder.ts`
+
+```typescript
+import { Seeder } from 'kythia-core';
+
+export default class UserSeeder extends Seeder {
+  public async run(): Promise<void> {
+    const { User } = this.container.models;
+    
+    await User.bulkCreate([
+      { username: 'Admin', discriminator: '0001', role: 'admin' },
+      { username: 'Moderator', discriminator: '0002', role: 'mod' },
+      { username: 'User', discriminator: '0003', role: 'user' },
+    ]);
+  }
+}
+```
+
+---
+
 ### cache:clear
 
 Flush Redis cache.
@@ -352,6 +428,70 @@ id.json:
 ---
 
 ## Development Commands
+
+### docs:generate
+
+Generate markdown documentation for all Discord commands.
+
+#### Usage
+
+```bash
+npx kythia docs:generate [options]
+```
+
+#### Options
+
+- `-p, --path <path>` - Custom output path for documentation (default: `docs/commands`)
+
+#### Features
+
+- Supports simple and split command structures
+- Generates metadata (permissions, cooldowns, aliases)
+- Resolves module aliases from `package.json`
+
+#### Example
+
+**Generate to default path:**
+```bash
+npx kythia docs:generate
+```
+
+**Generate to specific path:**
+```bash
+npx kythia docs:generate -p src/docs
+```
+
+---
+
+### di:generate
+
+Generate TypeScript definitions for Dependency Injection.
+
+#### Usage
+
+```bash
+npx kythia di:generate
+```
+
+#### Features
+
+- **Smart Analysis** - Reads `index.js` AST to find injected helpers
+- **Auto Discovery** - Scans filesystem for Models and Helpers
+- **Type Safety** - Generates `types/auto-di.d.ts` for IntelliSense
+
+#### Example Output
+
+```
+🧙‍♂️ Kythia Type Wizard (Smart Mode)
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 Reading index.js to find injected helpers...
+   > Detected keys: color, currency
+
+✨ Done! Generated types matching your index.js dependencies.
+```
+
+---
 
 ### dev:namespace
 

@@ -19,8 +19,8 @@ export default abstract class Command {
 		this.configure(cmd);
 
 		cmd.action((...args: unknown[]) => {
-			const options = args[args.length - 1] as Record<string, unknown>;
-			void this.handle(options, ...args.slice(0, -1));
+			const options = (args[0] as Record<string, unknown>) || {};
+			void this.handle(options, ...args.slice(1));
 		});
 	}
 
