@@ -16,22 +16,20 @@ import {
 	Collection,
 	ButtonStyle,
 	MessageFlags,
-	EmbedBuilder,
 	ButtonBuilder,
-	WebhookClient,
+	SectionBuilder,
 	SeparatorBuilder,
 	ActionRowBuilder,
 	ContainerBuilder,
+	ThumbnailBuilder,
 	TextDisplayBuilder,
 	SeparatorSpacingSize,
-	SectionBuilder,
-	ThumbnailBuilder,
 	type Interaction,
-	type ChatInputCommandInteraction,
-	type AutocompleteInteraction,
 	type ButtonInteraction,
 	type ModalSubmitInteraction,
+	type AutocompleteInteraction,
 	type AnySelectMenuInteraction,
+	type ChatInputCommandInteraction,
 	type UserContextMenuCommandInteraction,
 	type MessageContextMenuCommandInteraction,
 } from 'discord.js';
@@ -630,6 +628,18 @@ export class InteractionManager implements IInteractionManager {
 							)
 							.setURL(`https://discord.com/users/${ownerFirstId}`),
 					),
+				)
+				.addTextDisplayComponents(
+					new TextDisplayBuilder().setContent(
+						await this.t(interaction, 'common.container.footer', {
+							username: this.client.user?.username || 'Kythia',
+						}),
+					),
+				)
+				.addSeparatorComponents(
+					new SeparatorBuilder()
+						.setSpacing(SeparatorSpacingSize.Small)
+						.setDivider(true),
 				),
 		];
 		try {
